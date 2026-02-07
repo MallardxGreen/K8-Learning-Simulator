@@ -1,0 +1,229 @@
+import { useState, useCallback, useRef, useEffect } from 'react';
+import type { ClusterState, K8sResource } from '../clusterState';
+
+interface LiveDiagramProps {
+  cluster: ClusterState;
+}
+
+const RESOURCE_STYLE: Record<string, { emoji: string; bg: string; border: string; text: string }> = {
+  namespace:  { emoji: '📁', bg: '#1e1b4b', border: '#6366f1', text: '#a78bfa' },
+  node:       { emoji: '🖥️', bg: '#0c4a6e', border: '#0284c7', text: '#7dd3fc' },
+  pod:        { emoji: '🐳', bg: '#1e3a5f', border: '#3b82f6', text: '#93c5fd' },
+  deployment: { emoji: '🚀', bg: '#064e3b', border: '#10b981', text: '#6ee7b7' },
+  replicaset: { emoji: '📋', bg: '#134e4a', border: '#14b8a6', text: '#5eead4' },
+  service:    { emoji: '🌐', bg: '#78350f', border: '#f59e0b', text: '#fde68a' },
+  configmap:  { emoji: '⚙️', bg: '#334155', border: '#64748b', text: '#cbd5e1' },
+  secret:     { emoji: '🔒', bg: '#7f1d1d', border: '#ef4444', text: '#fca5a5' },
+  ingress:    { emoji: '🔀', bg: '#4c1d95', border: '#7c3aed', text: '#c4b5fd' },
+};
+
+const SYSTEM_NAMES = new Set(['default', 'kube-system', 'node-1', 'node-2']);
+const NODE_W = 130;
+const NODE_H = 56;
+const GAP_X = 20;
+const GAP_Y = 30;
+const PADDING_TOP = 30;
+const PADDING_LEFT = 20;
+
+export default function LiveDiagram({ cluster }: LiveDiagramProps) {
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const isPanning = useRef(false);
+  const lastMouse = useRef({ x: 0, y: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const systemRes = cluster.resources.filter(r =>
+    SYSTEM_NAMES.has(r.name) && (r.type === 'namespace' || r.type === 'node')
+  );
+  const userRes = cluster.resources.filter(r => !systemRes.includes(r));
+
+  const grouped: Record<string, K8sResource[]> = {};
+  for (const r of userRes) {
+    if (!grouped[r.type]) grouped[r.type] = [];
+    grouped[r.type].push(r);
+  }
+
+  const typeOrder = ['namespace', 'ingress', 'service', 'deployment', 'replicaset', 'pod', 'configmap', 'secret'];
+  const activeTypes = typeOrder.filter(t => grouped[t]?.length);
+
+  const parentMap = new Map<string, string>();
+  for (const r of userRes) {
+    if (r.metadata.managedBy && typeof r.metadata.managedBy === 'string') {
+      parentMap.set(r.id, r.metadata.managedBy);
+    }
+    if (r.metadata.targetRef && typeof r.metadata.targetRef === 'string') {
+      parentMap.set(r.id, r.metadata.targetRef);
+    }
+  }
+
+  const positions = new Map<string, { x: number; y: number }>();
+  let rowY = PADDING_TOP;
+  let maxRowWidth = 0;
+
+  for (const type of activeTypes) {
+    const items = grouped[type];
+    const rowWidth = items.length * (NODE_W + GAP_X) - GAP_X;
+    maxRowWidth = Math.max(maxRowWidth, rowWidth);
+    const startX = PADDING_LEFT;
+    items.forEach((r, i) => {
+      positions.set(r.id, { x: startX + i * (NODE_W + GAP_X), y: rowY });
+    });
+    rowY += NODE_H + GAP_Y;
+  }
+
+  const svgW = Math.max(400, PADDING_LEFT * 2 + maxRowWidth);
+  const svgH = Math.max(150, rowY + 20);
+
+  const arrows: { fromX: number; fromY: number; toX: number; toY: number; color: string }[] = [];
+  for (const [childId, parentId] of parentMap) {
+    const childPos = positions.get(childId);
+    const parentPos = positions.get(parentId);
+    if (childPos && parentPos) {
+      const style = RESOURCE_STYLE[userRes.find(r => r.id === parentId)?.type || 'pod'];
+      arrows.push({
+        fromX: parentPos.x + NODE_W / 2,
+        fromY: parentPos.y + NODE_H,
+        toX: childPos.x + NODE_W / 2,
+        toY: childPos.y,
+        color: style?.border || '#475569',
+      });
+    }
+  }
+
+  // Zoom handlers
+  const zoomIn = useCallback(() => setZoom(z => Math.min(3, z + 0.25)), []);
+  const zoomOut = useCallback(() => setZoom(z => Math.max(0.25, z - 0.25)), []);
+  const resetView = useCallback(() => { setZoom(1); setPan({ x: 0, y: 0 }); }, []);
+
+  // Scroll wheel zoom
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    setZoom(z => Math.min(3, Math.max(0.25, z + delta)));
+  }, []);
+
+  // Pan with mouse drag
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    isPanning.current = true;
+    lastMouse.current = { x: e.clientX, y: e.clientY };
+  }, []);
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!isPanning.current) return;
+      const dx = e.clientX - lastMouse.current.x;
+      const dy = e.clientY - lastMouse.current.y;
+      lastMouse.current = { x: e.clientX, y: e.clientY };
+      setPan(p => ({ x: p.x + dx, y: p.y + dy }));
+    };
+    const onUp = () => { isPanning.current = false; };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, []);
+
+  return (
+    <div className="h-full flex flex-col bg-gray-950 border-l border-gray-800 overflow-hidden">
+      {/* Header with zoom controls */}
+      <div className="flex items-center justify-between px-3 py-1.5 bg-gray-900 border-b border-gray-800 flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <span className="text-xs">📐</span>
+          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Live Cluster</span>
+          <span className="text-xs text-gray-600">{userRes.length} resource{userRes.length !== 1 ? 's' : ''}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <button onClick={zoomOut} className="w-6 h-6 flex items-center justify-center text-xs text-gray-400 bg-gray-800 rounded hover:bg-gray-700 transition-colors" title="Zoom out">−</button>
+          <span className="text-xs text-gray-500 w-10 text-center">{Math.round(zoom * 100)}%</span>
+          <button onClick={zoomIn} className="w-6 h-6 flex items-center justify-center text-xs text-gray-400 bg-gray-800 rounded hover:bg-gray-700 transition-colors" title="Zoom in">+</button>
+          <button onClick={resetView} className="ml-1 px-2 h-6 flex items-center justify-center text-xs text-gray-400 bg-gray-800 rounded hover:bg-gray-700 transition-colors" title="Reset view">⟲</button>
+        </div>
+      </div>
+
+      {/* Diagram canvas */}
+      <div
+        ref={containerRef}
+        className="flex-1 overflow-hidden cursor-grab active:cursor-grabbing"
+        onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
+      >
+        {userRes.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center text-gray-600">
+            <span className="text-4xl mb-3">☸️</span>
+            <p className="text-sm">Your cluster is empty</p>
+            <p className="text-xs mt-1">Run a kubectl command to see resources here</p>
+          </div>
+        ) : (
+          <svg
+            width="100%"
+            height="100%"
+            style={{ overflow: 'visible' }}
+          >
+            <defs>
+              <marker id="live-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+                <polygon points="0 0, 8 3, 0 6" fill="#475569" />
+              </marker>
+            </defs>
+
+            <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
+              {/* Grid dots */}
+              {Array.from({ length: Math.ceil(svgW / 30) }).map((_, xi) =>
+                Array.from({ length: Math.ceil(svgH / 30) }).map((_, yi) => (
+                  <circle key={`dot-${xi}-${yi}`} cx={xi * 30} cy={yi * 30} r={0.8} fill="#1e293b" />
+                ))
+              )}
+
+              {/* Arrows */}
+              {arrows.map((a, i) => {
+                const midY = (a.fromY + a.toY) / 2;
+                const path = a.fromX === a.toX
+                  ? `M ${a.fromX} ${a.fromY} L ${a.toX} ${a.toY}`
+                  : `M ${a.fromX} ${a.fromY} L ${a.fromX} ${midY} L ${a.toX} ${midY} L ${a.toX} ${a.toY}`;
+                return (
+                  <path key={`arrow-${i}`} d={path} fill="none" stroke={a.color} strokeWidth={2} strokeOpacity={0.5} markerEnd="url(#live-arrow)" />
+                );
+              })}
+
+              {/* Resource nodes */}
+              {userRes.map(r => {
+                const pos = positions.get(r.id);
+                if (!pos) return null;
+                const style = RESOURCE_STYLE[r.type] || RESOURCE_STYLE.pod;
+                const status = r.metadata.status as string | undefined;
+                return (
+                  <g key={r.id}>
+                    <rect x={pos.x} y={pos.y} width={NODE_W} height={NODE_H} rx={8} fill={style.bg} stroke={style.border} strokeWidth={1.5} />
+                    <text x={pos.x + 12} y={pos.y + 22} fontSize={14}>{style.emoji}</text>
+                    <text x={pos.x + 32} y={pos.y + 22} fill={style.text} fontSize={10} fontWeight={600} fontFamily="system-ui, sans-serif">
+                      {r.name.length > 12 ? r.name.slice(0, 11) + '…' : r.name}
+                    </text>
+                    <text x={pos.x + 12} y={pos.y + 40} fill="#64748b" fontSize={8} fontFamily="system-ui, sans-serif">{r.type}</text>
+                    {status && (
+                      <text x={pos.x + NODE_W - 10} y={pos.y + 40} fill={status === 'Running' ? '#10b981' : '#f59e0b'} fontSize={8} textAnchor="end" fontFamily="system-ui, sans-serif">
+                        ● {status}
+                      </text>
+                    )}
+                  </g>
+                );
+              })}
+            </g>
+          </svg>
+        )}
+      </div>
+
+      {/* System resources footer */}
+      <div className="px-3 py-1.5 bg-gray-900 border-t border-gray-800 flex-shrink-0">
+        <div className="flex flex-wrap gap-1">
+          {systemRes.map(r => (
+            <span key={r.id} className="text-xs bg-gray-800 text-gray-500 px-2 py-0.5 rounded">
+              {RESOURCE_STYLE[r.type]?.emoji} {r.name}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

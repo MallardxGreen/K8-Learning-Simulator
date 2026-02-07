@@ -1,0 +1,115 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    @apply bg-gray-950 text-gray-100 m-0 p-0;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
+
+/* Lesson content styling */
+.lesson-content h2 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #1e293b;
+}
+
+.lesson-content h3 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin-top: 1.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.lesson-content p {
+  color: #94a3b8;
+  line-height: 1.75;
+  margin-bottom: 1rem;
+}
+
+.lesson-content ul, .lesson-content ol {
+  color: #94a3b8;
+  padding-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.lesson-content li {
+  margin-bottom: 0.5rem;
+  line-height: 1.6;
+}
+
+.lesson-content strong {
+  color: #e2e8f0;
+}
+
+.lesson-content code {
+  background: #1e293b;
+  color: #a5b4fc;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+}
+
+.lesson-content pre {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
+.lesson-content pre code {
+  background: none;
+  padding: 0;
+  color: #a5f3fc;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.lesson-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+}
+
+.lesson-content th {
+  background: #1e293b;
+  color: #e2e8f0;
+  padding: 0.6rem 1rem;
+  text-align: left;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-bottom: 2px solid #334155;
+}
+
+.lesson-content td {
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid #1e293b;
+  color: #94a3b8;
+  font-size: 0.875rem;
+}
+
+.lesson-content tr:hover td {
+  background: #1e293b40;
+}
+
+.lesson-content .info-box {
+  background: #1e1b4b;
+  border: 1px solid #3730a3;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin: 1.5rem 0;
+  color: #c7d2fe;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.lesson-content em {
+  color: #a5b4fc;
+  font-style: italic;
+}
