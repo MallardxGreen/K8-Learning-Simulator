@@ -15,6 +15,7 @@ const categoryIcons: Record<string, string> = {
   'Cluster Management': '🏗️',
   'Configuration': '⚙️',
   'Cloud Native': '☁️',
+  'Interview Labs': '🎯',
 };
 
 export default function Sidebar({ currentLessonId, progress, onSelectLesson, onResetProgress }: SidebarProps) {

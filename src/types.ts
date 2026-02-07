@@ -4,6 +4,7 @@ export interface Challenge {
   id: string;
   task: string;           // what to display: "Create a namespace called production"
   hint?: string;          // optional hint if they're stuck
+  answer?: string;        // the exact command to complete the challenge
   validate: (cluster: ClusterState) => boolean;  // check cluster state
 }
 

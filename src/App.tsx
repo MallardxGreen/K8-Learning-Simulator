@@ -85,10 +85,13 @@ export default function App() {
   }, [cluster]);
 
   const handleChallengeComplete = useCallback((challengeId: string) => {
-    if (!progress.completedChallenges.includes(challengeId)) {
-      updateProgress({ completedChallenges: [...progress.completedChallenges, challengeId] });
-    }
-  }, [progress.completedChallenges, updateProgress]);
+    setProgress(prev => {
+      if (prev.completedChallenges.includes(challengeId)) return prev;
+      const next = { ...prev, completedChallenges: [...prev.completedChallenges, challengeId] };
+      saveProgress(next);
+      return next;
+    });
+  }, []);
 
   const resetProgress = useCallback(() => {
     const fresh: UserProgress = { completedLessons: [], completedChallenges: [], currentLesson: lessons[0].id };
@@ -100,6 +103,16 @@ export default function App() {
 
   const completedChallengesSet = new Set(progress.completedChallenges);
   const hasPractice = !!currentLesson.example;
+
+  // Validate challenges against cluster state on every cluster change (works on both tabs)
+  useEffect(() => {
+    if (!currentLesson.challenges) return;
+    for (const ch of currentLesson.challenges) {
+      if (ch.validate(cluster)) {
+        handleChallengeComplete(ch.id);
+      }
+    }
+  }, [cluster, currentLesson.challenges, handleChallengeComplete]);
 
   return (
     <div className="h-screen w-screen flex overflow-hidden bg-gray-950">
@@ -158,11 +171,10 @@ export default function App() {
               hasPrev={currentIdx > 0}
               cluster={cluster}
               completedChallenges={completedChallengesSet}
-              onChallengeComplete={handleChallengeComplete}
               onSwitchToPractice={() => setActiveTab('practice')}
             />
           ) : (
-            <InteractivePanel lesson={currentLesson} cluster={cluster} onCommand={handleCommand} />
+            <InteractivePanel lesson={currentLesson} cluster={cluster} onCommand={handleCommand} completedChallenges={completedChallengesSet} />
           )}
         </div>
       </div>

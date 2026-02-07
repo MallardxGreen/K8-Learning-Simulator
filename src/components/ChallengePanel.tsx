@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import type { Challenge } from '../types';
 import type { ClusterState } from '../clusterState';
 
@@ -6,12 +6,11 @@ interface ChallengePanelProps {
   challenges: Challenge[];
   cluster: ClusterState;
   completedIds: Set<string>;
-  onComplete: (id: string) => void;
 }
 
-export default function ChallengePanel({ challenges, cluster, completedIds, onComplete }: ChallengePanelProps) {
+export default function ChallengePanel({ challenges, cluster, completedIds }: ChallengePanelProps) {
   const [showHints, setShowHints] = useState<Set<string>>(new Set());
-  const [manuallyCompleted, setManuallyCompleted] = useState<Set<string>>(new Set());
+  const [showAnswers, setShowAnswers] = useState<Set<string>>(new Set());
 
   const toggleHint = (id: string) => {
     setShowHints(prev => {
@@ -21,32 +20,19 @@ export default function ChallengePanel({ challenges, cluster, completedIds, onCo
     });
   };
 
-  // Reset manual completions when challenges change (new lesson)
-  const prevChallengeIds = useRef(challenges.map(c => c.id).join(','));
-  useEffect(() => {
-    const key = challenges.map(c => c.id).join(',');
-    if (key !== prevChallengeIds.current) {
-      prevChallengeIds.current = key;
-      setManuallyCompleted(new Set());
-    }
-  }, [challenges]);
+  const toggleAnswer = (id: string) => {
+    setShowAnswers(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
 
-  // Check each challenge against current cluster state
   const results = challenges.map(ch => ({
     ...ch,
     passed: ch.validate(cluster),
     wasCompleted: completedIds.has(ch.id),
   }));
-
-  // Auto-complete newly passing challenges in an effect, not during render
-  useEffect(() => {
-    for (const ch of challenges) {
-      const passed = ch.validate(cluster);
-      if (passed && !completedIds.has(ch.id)) {
-        onComplete(ch.id);
-      }
-    }
-  }, [cluster, challenges, completedIds, onComplete]);
 
   const allDone = results.every(r => r.passed || r.wasCompleted);
 
@@ -86,18 +72,39 @@ export default function ChallengePanel({ challenges, cluster, completedIds, onCo
                   <p className={`text-sm font-medium ${isDone ? 'text-green-300 line-through opacity-70' : 'text-gray-200'}`}>
                     {ch.task}
                   </p>
-                  {!isDone && ch.hint && (
-                    <button
-                      onClick={() => toggleHint(ch.id)}
-                      className="text-xs text-amber-500 hover:text-amber-400 mt-1 transition-colors"
-                    >
-                      {showHints.has(ch.id) ? '🙈 Hide hint' : '💡 Need a hint?'}
-                    </button>
+                  {!isDone && (
+                    <div className="flex items-center gap-3 mt-1">
+                      {ch.hint && (
+                        <button
+                          onClick={() => toggleHint(ch.id)}
+                          className="text-xs text-amber-500 hover:text-amber-400 transition-colors"
+                        >
+                          {showHints.has(ch.id) ? '🙈 Hide hint' : '💡 Hint'}
+                        </button>
+                      )}
+                      {ch.answer && (
+                        <button
+                          onClick={() => toggleAnswer(ch.id)}
+                          className="text-xs text-blue-500 hover:text-blue-400 transition-colors"
+                        >
+                          {showAnswers.has(ch.id) ? '🙈 Hide answer' : '📝 Show Answer'}
+                        </button>
+                      )}
+                    </div>
                   )}
                   {!isDone && showHints.has(ch.id) && ch.hint && (
                     <p className="text-xs text-amber-300/70 mt-1 italic">
                       Hint: {ch.hint}
                     </p>
+                  )}
+                  {!isDone && showAnswers.has(ch.id) && ch.answer && (
+                    <div className="mt-1.5">
+                      {ch.answer.split('\n').map((line, j) => (
+                        <code key={j} className="block text-xs text-blue-300 bg-gray-900 px-2 py-1 rounded font-mono mt-0.5">
+                          {line}
+                        </code>
+                      ))}
+                    </div>
                   )}
                   {isDone && (
                     <p className="text-xs text-green-500 mt-1">Verified ✓</p>

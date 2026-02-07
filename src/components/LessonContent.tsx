@@ -12,13 +12,12 @@ interface LessonContentProps {
   hasPrev: boolean;
   cluster: ClusterState;
   completedChallenges: Set<string>;
-  onChallengeComplete: (id: string) => void;
   onSwitchToPractice: () => void;
 }
 
 export default function LessonContent({
   lesson, isCompleted, onMarkComplete, onNext, onPrev, hasNext, hasPrev,
-  cluster, completedChallenges, onChallengeComplete, onSwitchToPractice,
+  cluster, completedChallenges, onSwitchToPractice,
 }: LessonContentProps) {
   return (
     <div className="h-full overflow-y-auto">
@@ -65,7 +64,6 @@ export default function LessonContent({
             challenges={lesson.challenges}
             cluster={cluster}
             completedIds={completedChallenges}
-            onComplete={onChallengeComplete}
           />
         )}
 
