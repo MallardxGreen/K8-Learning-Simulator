@@ -1,4 +1,6 @@
 import type { Lesson } from '../types';
+import type { ClusterState } from '../clusterState';
+import ChallengePanel from './ChallengePanel';
 
 interface LessonContentProps {
   lesson: Lesson;
@@ -8,10 +10,15 @@ interface LessonContentProps {
   onPrev: () => void;
   hasNext: boolean;
   hasPrev: boolean;
+  cluster: ClusterState;
+  completedChallenges: Set<string>;
+  onChallengeComplete: (id: string) => void;
+  onSwitchToPractice: () => void;
 }
 
 export default function LessonContent({
   lesson, isCompleted, onMarkComplete, onNext, onPrev, hasNext, hasPrev,
+  cluster, completedChallenges, onChallengeComplete, onSwitchToPractice,
 }: LessonContentProps) {
   return (
     <div className="h-full overflow-y-auto">
@@ -36,7 +43,7 @@ export default function LessonContent({
           <div className="mt-8 p-5 bg-gray-800/80 rounded-xl border border-gray-700">
             <h3 className="text-sm font-semibold text-green-400 mb-3">🧪 Try It Yourself</h3>
             <p className="text-sm text-gray-400 mb-3">
-              Use the terminal panel below to practice. Resources you create will appear in the live diagram.
+              Switch to the Practice tab to use the terminal. Resources you create will appear in the live diagram.
             </p>
             <code className="block bg-gray-900 text-green-300 px-4 py-2 rounded-lg text-sm font-mono">
               {lesson.example}
@@ -44,7 +51,22 @@ export default function LessonContent({
             {lesson.hint && (
               <p className="text-xs text-gray-500 mt-3 italic">💡 {lesson.hint}</p>
             )}
+            <button
+              onClick={onSwitchToPractice}
+              className="mt-4 px-4 py-2 text-sm font-medium rounded-lg bg-green-600 text-white hover:bg-green-500 transition-colors"
+            >
+              Open Practice Terminal →
+            </button>
           </div>
+        )}
+
+        {lesson.challenges && lesson.challenges.length > 0 && (
+          <ChallengePanel
+            challenges={lesson.challenges}
+            cluster={cluster}
+            completedIds={completedChallenges}
+            onComplete={onChallengeComplete}
+          />
         )}
 
         <div className="flex items-center justify-between mt-10 pt-6 border-t border-gray-800">

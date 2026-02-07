@@ -44,6 +44,11 @@ kubectl get all</code></pre>
 `,
     example: 'kubectl cluster-info',
     hint: 'Try running kubectl cluster-info to see your simulated cluster.',
+    challenges: [
+      { id: 'k8s-1', task: 'Create a pod called "my-first-pod" with any image', hint: 'Use kubectl run with --image flag', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'my-first-pod') },
+      { id: 'k8s-2', task: 'Create a deployment called "hello-world"', hint: 'Use kubectl create deployment', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'hello-world') },
+      { id: 'k8s-3', task: 'List all resources in the cluster', hint: 'Try kubectl get all', validate: (c) => c.resources.some(r => r.type === 'pod' || r.type === 'deployment') },
+    ],
     diagram: [
       { id: 'cp', label: 'Control Plane', type: 'control-plane', icon: '🧠', color: '#8b5cf6', children: ['n1', 'n2'] },
       { id: 'n1', label: 'Worker Node 1', type: 'node', icon: '🖥️', color: '#6366f1', children: ['p1', 'p2'] },
@@ -101,6 +106,10 @@ kubectl describe node node-1</code></pre>
 `,
     example: 'kubectl get nodes',
     hint: 'Use kubectl get nodes to see the nodes in your cluster.',
+    challenges: [
+      { id: 'arch-1', task: 'Create a pod called "test-node" to verify your cluster is working', hint: 'kubectl run test-node --image=nginx', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'test-node') },
+      { id: 'arch-2', task: 'Create a deployment called "web-server" and then check what resources were created', hint: 'Create it, then use kubectl get all', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'web-server') },
+    ],
     diagram: [
       { id: 'api', label: 'API Server', type: 'component', icon: '🔌', color: '#8b5cf6', children: ['etcd', 'sched', 'cm'] },
       { id: 'etcd', label: 'etcd', type: 'component', icon: '💾', color: '#f59e0b' },
@@ -168,6 +177,11 @@ kubectl delete pod nginx</code></pre>
     example: 'kubectl run nginx --image=nginx',
     expectedCommands: ['kubectl run nginx --image=nginx', 'kubectl get pods'],
     hint: 'Create a pod with kubectl run, then check it with kubectl get pods.',
+    challenges: [
+      { id: 'pod-1', task: 'Create a pod called "web-app" running the nginx image', hint: 'kubectl run <name> --image=<image>', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'web-app') },
+      { id: 'pod-2', task: 'Create a second pod called "cache" running the redis image', hint: 'Same as above but with a different name and image', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'cache' && r.metadata.image === 'redis') },
+      { id: 'pod-3', task: 'Delete the "web-app" pod', hint: 'kubectl delete pod <name>', validate: (c) => !c.resources.some(r => r.type === 'pod' && r.name === 'web-app') },
+    ],
   },
   // ── DEPLOYMENTS ──
   {
@@ -226,6 +240,11 @@ kubectl expose deployment webapp --port=80</code></pre>
     example: 'kubectl create deployment webapp --image=nginx',
     expectedCommands: ['kubectl create deployment webapp --image=nginx', 'kubectl get deployments', 'kubectl scale deployment/webapp --replicas=3'],
     hint: 'Create a deployment, then try scaling it up with kubectl scale.',
+    challenges: [
+      { id: 'dep-1', task: 'Create a deployment called "frontend" with the nginx image', hint: 'kubectl create deployment <name> --image=<image>', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'frontend') },
+      { id: 'dep-2', task: 'Scale "frontend" to 4 replicas', hint: 'kubectl scale deployment/<name> --replicas=<n>', validate: (c) => { const dep = c.resources.find(r => r.type === 'deployment' && r.name === 'frontend'); return dep?.metadata.replicas === 4; } },
+      { id: 'dep-3', task: 'Create another deployment called "backend" and expose it as a service on port 3000', hint: 'Create the deployment first, then use kubectl expose', validate: (c) => c.resources.some(r => r.type === 'service' && r.name === 'backend') },
+    ],
   },
   // ── SERVICES ──
   {
@@ -275,6 +294,10 @@ kubectl get all</code></pre>
     example: 'kubectl expose deployment webapp --port=80',
     expectedCommands: ['kubectl expose deployment webapp --port=80'],
     hint: 'First create a deployment named "webapp", then expose it as a service.',
+    challenges: [
+      { id: 'svc-1', task: 'Create a deployment called "api-server" and expose it as a service on port 8080', hint: 'Create deployment first, then kubectl expose deployment <name> --port=<port>', validate: (c) => c.resources.some(r => r.type === 'service' && r.name === 'api-server') },
+      { id: 'svc-2', task: 'Create a standalone service called "database-svc" on port 5432', hint: 'kubectl create service <name> --port=<port>', validate: (c) => c.resources.some(r => r.type === 'service' && r.name === 'database-svc') },
+    ],
   },
   // ── NAMESPACES ──
   {
@@ -334,6 +357,11 @@ kubectl get all -A</code></pre>
     example: 'kubectl create namespace dev-team',
     expectedCommands: ['kubectl create namespace dev-team', 'kubectl run nginx --image=nginx -n dev-team'],
     hint: 'Create a namespace, then create a pod inside it using the -n flag.',
+    challenges: [
+      { id: 'ns-1', task: 'Create a namespace called "production"', hint: 'kubectl create namespace <name>', validate: (c) => c.resources.some(r => r.type === 'namespace' && r.name === 'production') },
+      { id: 'ns-2', task: 'Create a pod called "api" in the "production" namespace', hint: 'Use the -n flag to specify the namespace', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'api' && r.namespace === 'production') },
+      { id: 'ns-3', task: 'Create a namespace called "staging" and deploy an app called "test-app" in it', hint: 'Create the namespace first, then create a deployment with -n', validate: (c) => c.resources.some(r => r.type === 'namespace' && r.name === 'staging') && c.resources.some(r => r.name === 'test-app' && r.namespace === 'staging') },
+    ],
   },
   // ── CONFIGMAPS & SECRETS ──
   {
@@ -384,6 +412,11 @@ kubectl describe secret db-creds</code></pre>
     example: 'kubectl create configmap app-config',
     expectedCommands: ['kubectl create configmap app-config', 'kubectl create secret db-creds'],
     hint: 'Try creating a configmap and a secret.',
+    challenges: [
+      { id: 'cfg-1', task: 'Create a ConfigMap called "env-config"', hint: 'kubectl create configmap <name>', validate: (c) => c.resources.some(r => r.type === 'configmap' && r.name === 'env-config') },
+      { id: 'cfg-2', task: 'Create a Secret called "api-keys"', hint: 'kubectl create secret <name>', validate: (c) => c.resources.some(r => r.type === 'secret' && r.name === 'api-keys') },
+      { id: 'cfg-3', task: 'Create a deployment called "app" and also create a configmap called "app-settings" for it', hint: 'Two separate commands — one for the deployment, one for the configmap', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'app') && c.resources.some(r => r.type === 'configmap' && r.name === 'app-settings') },
+    ],
   },
   // ── CLOUD NATIVE CONCEPTS ──
   {
@@ -512,6 +545,9 @@ kubectl get all</code></pre>
 `,
     example: 'kubectl create ingress app-ingress',
     hint: 'Create an ingress resource to see it appear in the simulator.',
+    challenges: [
+      { id: 'ing-1', task: 'Create a deployment called "web", expose it as a service, then create an ingress called "web-ingress"', hint: 'Three commands: create deployment, expose it, create ingress', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'web') && c.resources.some(r => r.type === 'service' && r.name === 'web') && c.resources.some(r => r.type === 'ingress' && r.name === 'web-ingress') },
+    ],
   },
 ];
 

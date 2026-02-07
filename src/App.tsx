@@ -1,18 +1,38 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import LessonContent from './components/LessonContent';
 import InteractivePanel from './components/InteractivePanel';
 import { lessons } from './lessons';
+import { parseAndExecute } from './clusterState';
+import type { ClusterState } from './clusterState';
 import type { UserProgress } from './types';
 
 const STORAGE_KEY = 'k8s-academy-progress';
 
+function makeInitialCluster(): ClusterState {
+  return {
+    resources: [
+      { id: 'ns-default', type: 'namespace', name: 'default', namespace: '', labels: {}, metadata: {}, createdAt: Date.now() },
+      { id: 'ns-kube-system', type: 'namespace', name: 'kube-system', namespace: '', labels: {}, metadata: {}, createdAt: Date.now() },
+      { id: 'node-1', type: 'node', name: 'node-1', namespace: '', labels: { role: 'worker' }, metadata: { status: 'Ready' }, createdAt: Date.now() },
+      { id: 'node-2', type: 'node', name: 'node-2', namespace: '', labels: { role: 'worker' }, metadata: { status: 'Ready' }, createdAt: Date.now() },
+    ],
+  };
+}
+
 function loadProgress(): UserProgress {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return {
+        completedLessons: parsed.completedLessons || [],
+        completedChallenges: parsed.completedChallenges || [],
+        currentLesson: parsed.currentLesson || lessons[0].id,
+      };
+    }
   } catch { /* ignore */ }
-  return { completedLessons: [], currentLesson: lessons[0].id };
+  return { completedLessons: [], completedChallenges: [], currentLesson: lessons[0].id };
 }
 
 function saveProgress(progress: UserProgress) {
@@ -21,13 +41,14 @@ function saveProgress(progress: UserProgress) {
 
 export default function App() {
   const [progress, setProgress] = useState<UserProgress>(loadProgress);
+  const [cluster, setCluster] = useState<ClusterState>(makeInitialCluster);
+  const [activeTab, setActiveTab] = useState<'learn' | 'practice'>('learn');
   const currentLesson = lessons.find(l => l.id === progress.currentLesson) || lessons[0];
   const currentIdx = lessons.findIndex(l => l.id === currentLesson.id);
 
-  // Vertical split: percentage of height for lesson content (top)
-  const [topPercent, setTopPercent] = useState(55);
-  const isDraggingV = useRef(false);
-  const mainRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    setCluster(makeInitialCluster());
+  }, [currentLesson.id]);
 
   const updateProgress = useCallback((update: Partial<UserProgress>) => {
     setProgress(prev => {
@@ -39,6 +60,7 @@ export default function App() {
 
   const selectLesson = useCallback((id: string) => {
     updateProgress({ currentLesson: id });
+    setActiveTab('learn');
   }, [updateProgress]);
 
   const markComplete = useCallback(() => {
@@ -56,35 +78,28 @@ export default function App() {
     if (currentIdx > 0) selectLesson(lessons[currentIdx - 1].id);
   }, [currentIdx, selectLesson]);
 
-  // Vertical drag handler
-  const handleVDragStart = useCallback(() => {
-    isDraggingV.current = true;
-    document.body.style.cursor = 'row-resize';
-    document.body.style.userSelect = 'none';
+  const handleCommand = useCallback((cmd: string) => {
+    const { state: newState, result } = parseAndExecute(cluster, cmd);
+    setCluster(newState);
+    return result;
+  }, [cluster]);
+
+  const handleChallengeComplete = useCallback((challengeId: string) => {
+    if (!progress.completedChallenges.includes(challengeId)) {
+      updateProgress({ completedChallenges: [...progress.completedChallenges, challengeId] });
+    }
+  }, [progress.completedChallenges, updateProgress]);
+
+  const resetProgress = useCallback(() => {
+    const fresh: UserProgress = { completedLessons: [], completedChallenges: [], currentLesson: lessons[0].id };
+    setProgress(fresh);
+    saveProgress(fresh);
+    setCluster(makeInitialCluster());
+    setActiveTab('learn');
   }, []);
 
-  useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      if (!isDraggingV.current || !mainRef.current) return;
-      const rect = mainRef.current.getBoundingClientRect();
-      const y = e.clientY - rect.top;
-      const pct = Math.min(85, Math.max(15, (y / rect.height) * 100));
-      setTopPercent(pct);
-    };
-    const onUp = () => {
-      if (isDraggingV.current) {
-        isDraggingV.current = false;
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-      }
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-    return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
-  }, []);
+  const completedChallengesSet = new Set(progress.completedChallenges);
+  const hasPractice = !!currentLesson.example;
 
   return (
     <div className="h-screen w-screen flex overflow-hidden bg-gray-950">
@@ -92,31 +107,63 @@ export default function App() {
         currentLessonId={currentLesson.id}
         progress={progress}
         onSelectLesson={selectLesson}
+        onResetProgress={resetProgress}
       />
-      <div ref={mainRef} className="flex-1 flex flex-col overflow-hidden min-w-0">
-        {/* Lesson content — top */}
-        <div style={{ height: `${topPercent}%` }} className="overflow-y-auto min-h-0">
-          <LessonContent
-            lesson={currentLesson}
-            isCompleted={progress.completedLessons.includes(currentLesson.id)}
-            onMarkComplete={markComplete}
-            onNext={goNext}
-            onPrev={goPrev}
-            hasNext={currentIdx < lessons.length - 1}
-            hasPrev={currentIdx > 0}
-          />
+
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        {/* Tab bar */}
+        <div className="flex items-center bg-gray-900 border-b border-gray-800 px-4 flex-shrink-0">
+          <button
+            onClick={() => setActiveTab('learn')}
+            className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'learn'
+                ? 'border-indigo-500 text-indigo-300'
+                : 'border-transparent text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            📖 Learn
+          </button>
+          {hasPractice && (
+            <button
+              onClick={() => setActiveTab('practice')}
+              className={`px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'practice'
+                  ? 'border-green-500 text-green-300'
+                  : 'border-transparent text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              🧪 Practice
+            </button>
+          )}
+          <div className="ml-auto flex items-center gap-3">
+            <span className="text-xs text-gray-600">{currentLesson.title}</span>
+            {currentLesson.challenges && currentLesson.challenges.length > 0 && (
+              <span className="text-xs text-amber-500">
+                🏆 {currentLesson.challenges.filter(c => completedChallengesSet.has(c.id)).length}/{currentLesson.challenges.length}
+              </span>
+            )}
+          </div>
         </div>
 
-        {/* Horizontal drag handle */}
-        <div
-          onMouseDown={handleVDragStart}
-          className="h-1.5 bg-gray-800 hover:bg-indigo-500 cursor-row-resize flex-shrink-0 transition-colors"
-          title="Drag to resize"
-        />
-
-        {/* Interactive panel — bottom */}
-        <div style={{ height: `${100 - topPercent}%` }} className="min-h-0">
-          <InteractivePanel lesson={currentLesson} />
+        {/* Content area */}
+        <div className="flex-1 overflow-hidden min-h-0">
+          {activeTab === 'learn' ? (
+            <LessonContent
+              lesson={currentLesson}
+              isCompleted={progress.completedLessons.includes(currentLesson.id)}
+              onMarkComplete={markComplete}
+              onNext={goNext}
+              onPrev={goPrev}
+              hasNext={currentIdx < lessons.length - 1}
+              hasPrev={currentIdx > 0}
+              cluster={cluster}
+              completedChallenges={completedChallengesSet}
+              onChallengeComplete={handleChallengeComplete}
+              onSwitchToPractice={() => setActiveTab('practice')}
+            />
+          ) : (
+            <InteractivePanel lesson={currentLesson} cluster={cluster} onCommand={handleCommand} />
+          )}
         </div>
       </div>
     </div>
