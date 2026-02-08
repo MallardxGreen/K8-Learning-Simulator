@@ -48,6 +48,9 @@ kubectl get all</code></pre>
     challenges: [
       { id: 'k8s-1', task: 'Run a pod called "hello" using the nginx image', hint: 'kubectl run hello --image=nginx', answer: 'kubectl run hello --image=nginx', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'hello') },
       { id: 'k8s-2', task: 'Run a second pod called "world" using any image', hint: 'kubectl run world --image=redis', answer: 'kubectl run world --image=redis', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'world') },
+      { id: 'k8s-3', task: 'List all pods to verify they are running', hint: 'kubectl get pods', answer: 'kubectl get pods', validate: (c) => c.resources.filter(r => r.type === 'pod').length >= 2 },
+      { id: 'k8s-4', task: 'Describe the "hello" pod to see its details', hint: 'kubectl describe pod hello', answer: 'kubectl describe pod hello', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'hello') },
+      { id: 'k8s-5', task: 'Delete the "world" pod', hint: 'kubectl delete pod world', answer: 'kubectl delete pod world', validate: (c) => !c.resources.some(r => r.type === 'pod' && r.name === 'world') },
     ],
   },
   {
@@ -100,6 +103,8 @@ kubectl get pods</code></pre>
     challenges: [
       { id: 'arch-1', task: 'Run a pod called "test-pod" to verify your cluster is working', hint: 'kubectl run test-pod --image=nginx', answer: 'kubectl run test-pod --image=nginx', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'test-pod') },
       { id: 'arch-2', task: 'Create a second pod called "worker" in the cluster', hint: 'kubectl run worker --image=nginx', answer: 'kubectl run worker --image=nginx', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'worker') },
+      { id: 'arch-3', task: 'Describe the "test-pod" to see which node it was scheduled on', hint: 'kubectl describe pod test-pod', answer: 'kubectl describe pod test-pod', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'test-pod') },
+      { id: 'arch-4', task: 'Create a deployment called "web" to see the controller chain', hint: 'kubectl create deployment web --image=nginx', answer: 'kubectl create deployment web --image=nginx', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'web') },
     ],
   },
   // ── CONTAINER RUNTIMES & OCI ──
@@ -260,7 +265,9 @@ kubectl delete pod temp</code></pre>
       { id: 'pod-1', task: 'Create a pod called "web-app" running the nginx image', hint: 'kubectl run <name> --image=<image>', answer: 'kubectl run web-app --image=nginx', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'web-app') },
       { id: 'pod-2', task: 'Create a pod called "cache" running the redis image', hint: 'Same as above but with a different name and image', answer: 'kubectl run cache --image=redis', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'cache' && r.metadata.image === 'redis') },
       { id: 'pod-3', task: 'Add the label "env=production" to the "web-app" pod', hint: 'kubectl label pod <name> key=value', answer: 'kubectl label pod web-app env=production', validate: (c) => { const p = c.resources.find(r => r.type === 'pod' && r.name === 'web-app'); return p?.labels?.env === 'production'; } },
-      { id: 'pod-4', task: 'Delete the "cache" pod', hint: 'kubectl delete pod <name>', answer: 'kubectl delete pod cache', validate: (c) => !c.resources.some(r => r.type === 'pod' && r.name === 'cache') },
+      { id: 'pod-4', task: 'Describe the "web-app" pod to see its details', hint: 'kubectl describe pod web-app', answer: 'kubectl describe pod web-app', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'web-app') },
+      { id: 'pod-5', task: 'Delete the "cache" pod', hint: 'kubectl delete pod <name>', answer: 'kubectl delete pod cache', validate: (c) => !c.resources.some(r => r.type === 'pod' && r.name === 'cache') },
+      { id: 'pod-6', task: 'Create a pod called "db" with the postgres image and label it tier=backend', hint: 'Create the pod first, then label it', answer: 'kubectl run db --image=postgres', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'db' && r.metadata.image === 'postgres') },
     ],
   },
   // ── DEPLOYMENTS ──
@@ -397,7 +404,9 @@ kubectl scale statefulset/mysql --replicas=2</code></pre>
     challenges: [
       { id: 'ss-1', task: 'Create a StatefulSet called "db" with 3 replicas', hint: 'kubectl create statefulset db --image=mysql --replicas=3', answer: 'kubectl create statefulset db --image=mysql --replicas=3', validate: (c) => { const ss = c.resources.find(r => r.type === 'statefulset' && r.name === 'db'); return ss !== undefined && ss.metadata.replicas === 3; } },
       { id: 'ss-2', task: 'Scale "db" StatefulSet to 5 replicas', hint: 'kubectl scale statefulset/db --replicas=5', answer: 'kubectl scale statefulset/db --replicas=5', validate: (c) => { const ss = c.resources.find(r => r.type === 'statefulset' && r.name === 'db'); return ss?.metadata.replicas === 5; } },
-      { id: 'ss-3', task: 'Scale "db" back down to 2 replicas', hint: 'kubectl scale statefulset/db --replicas=2', answer: 'kubectl scale statefulset/db --replicas=2', validate: (c) => { const ss = c.resources.find(r => r.type === 'statefulset' && r.name === 'db'); return ss?.metadata.replicas === 2; } },
+      { id: 'ss-3', task: 'Describe the "db" StatefulSet to see its configuration', hint: 'kubectl describe statefulset db', answer: 'kubectl describe statefulset db', validate: (c) => c.resources.some(r => r.type === 'statefulset' && r.name === 'db') },
+      { id: 'ss-4', task: 'Scale "db" back down to 2 replicas', hint: 'kubectl scale statefulset/db --replicas=2', answer: 'kubectl scale statefulset/db --replicas=2', validate: (c) => { const ss = c.resources.find(r => r.type === 'statefulset' && r.name === 'db'); return ss?.metadata.replicas === 2; } },
+      { id: 'ss-5', task: 'Create a headless Service "db-headless" for the StatefulSet', hint: 'kubectl create service db-headless --port=3306', answer: 'kubectl create service db-headless --port=3306', validate: (c) => c.resources.some(r => r.type === 'service' && r.name === 'db-headless') },
     ],
   },
   // ── DAEMONSETS ──
@@ -452,7 +461,9 @@ kubectl get daemonsets</code></pre>
     challenges: [
       { id: 'ds-1', task: 'Create a DaemonSet called "log-agent" with the fluentd image', hint: 'kubectl create daemonset log-agent --image=fluentd', answer: 'kubectl create daemonset log-agent --image=fluentd', validate: (c) => c.resources.some(r => r.type === 'daemonset' && r.name === 'log-agent') },
       { id: 'ds-2', task: 'Create a DaemonSet called "monitor" with the prometheus image', hint: 'kubectl create daemonset monitor --image=prometheus', answer: 'kubectl create daemonset monitor --image=prometheus', validate: (c) => c.resources.some(r => r.type === 'daemonset' && r.name === 'monitor') },
-      { id: 'ds-3', task: 'Delete the "log-agent" DaemonSet', hint: 'kubectl delete daemonset log-agent', answer: 'kubectl delete daemonset log-agent', validate: (c) => !c.resources.some(r => r.type === 'daemonset' && r.name === 'log-agent') },
+      { id: 'ds-3', task: 'Describe the "log-agent" DaemonSet to see its pods', hint: 'kubectl describe daemonset log-agent', answer: 'kubectl describe daemonset log-agent', validate: (c) => c.resources.some(r => r.type === 'daemonset' && r.name === 'log-agent') },
+      { id: 'ds-4', task: 'Delete the "monitor" DaemonSet', hint: 'kubectl delete daemonset monitor', answer: 'kubectl delete daemonset monitor', validate: (c) => !c.resources.some(r => r.type === 'daemonset' && r.name === 'monitor') },
+      { id: 'ds-5', task: 'Create a DaemonSet called "network-plugin" with the calico image', hint: 'kubectl create daemonset network-plugin --image=calico', answer: 'kubectl create daemonset network-plugin --image=calico', validate: (c) => c.resources.some(r => r.type === 'daemonset' && r.name === 'network-plugin') },
     ],
   },
   // ── JOBS & CRONJOBS ──
@@ -520,6 +531,9 @@ kubectl get cronjobs</code></pre>
       { id: 'job-1', task: 'Create a Job called "backup" with the busybox image', hint: 'kubectl create job backup --image=busybox', answer: 'kubectl create job backup --image=busybox', validate: (c) => c.resources.some(r => r.type === 'job' && r.name === 'backup') },
       { id: 'job-2', task: 'Create a Job called "batch" with 3 completions', hint: 'Use --completions=3 flag', answer: 'kubectl create job batch --image=python --completions=3', validate: (c) => { const j = c.resources.find(r => r.type === 'job' && r.name === 'batch'); return j?.metadata.completions === 3; } },
       { id: 'job-3', task: 'Create a CronJob called "nightly-report" that runs daily at 2 AM', hint: 'Use --schedule="0 2 * * *"', answer: 'kubectl create cronjob nightly-report --image=busybox --schedule="0 2 * * *"', validate: (c) => c.resources.some(r => r.type === 'cronjob' && r.name === 'nightly-report') },
+      { id: 'job-4', task: 'Create a Job "data-process" with 5 completions and parallelism of 2', hint: 'Use --completions=5 --parallelism=2', answer: 'kubectl create job data-process --image=python --completions=5 --parallelism=2', validate: (c) => { const j = c.resources.find(r => r.type === 'job' && r.name === 'data-process'); return j?.metadata.completions === 5 && j?.metadata.parallelism === 2; } },
+      { id: 'job-5', task: 'Delete the "backup" Job', hint: 'kubectl delete job backup', answer: 'kubectl delete job backup', validate: (c) => !c.resources.some(r => r.type === 'job' && r.name === 'backup') },
+      { id: 'job-6', task: 'Create a CronJob "weekly-cleanup" with a weekly schedule', hint: 'Use --schedule="0 0 * * 0"', answer: 'kubectl create cronjob weekly-cleanup --image=busybox --schedule="0 0 * * 0"', validate: (c) => c.resources.some(r => r.type === 'cronjob' && r.name === 'weekly-cleanup') },
     ],
   },
   // ── NAMESPACES ──
@@ -593,6 +607,8 @@ kubectl get all -A</code></pre>
       { id: 'ns-2', task: 'Create a pod called "api" in the "production" namespace', hint: 'Use the -n flag to specify the namespace', answer: 'kubectl run api --image=nginx -n production', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'api' && r.namespace === 'production') },
       { id: 'ns-3', task: 'Create a namespace called "staging"', hint: 'kubectl create namespace staging', answer: 'kubectl create namespace staging', validate: (c) => c.resources.some(r => r.type === 'namespace' && r.name === 'staging') },
       { id: 'ns-4', task: 'Create a deployment called "web" in the "staging" namespace', hint: 'kubectl create deployment web --image=nginx -n staging', answer: 'kubectl create deployment web --image=nginx -n staging', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'web' && r.namespace === 'staging') },
+      { id: 'ns-5', task: 'Create a ConfigMap "app-config" in the "production" namespace', hint: 'kubectl create configmap app-config -n production', answer: 'kubectl create configmap app-config -n production', validate: (c) => c.resources.some(r => r.type === 'configmap' && r.name === 'app-config' && r.namespace === 'production') },
+      { id: 'ns-6', task: 'Delete the "staging" namespace', hint: 'kubectl delete namespace staging', answer: 'kubectl delete namespace staging', validate: (c) => !c.resources.some(r => r.type === 'namespace' && r.name === 'staging') },
     ],
   },
   // ── CONFIGMAPS & SECRETS ──
@@ -665,8 +681,10 @@ kubectl describe secret db-creds</code></pre>
     challenges: [
       { id: 'cfg-1', task: 'Create a ConfigMap called "env-config"', hint: 'kubectl create configmap <name>', answer: 'kubectl create configmap env-config', validate: (c) => c.resources.some(r => r.type === 'configmap' && r.name === 'env-config') },
       { id: 'cfg-2', task: 'Create a Secret called "api-keys"', hint: 'kubectl create secret <name>', answer: 'kubectl create secret api-keys', validate: (c) => c.resources.some(r => r.type === 'secret' && r.name === 'api-keys') },
-      { id: 'cfg-3', task: 'Create a ConfigMap called "app-settings"', hint: 'kubectl create configmap app-settings', answer: 'kubectl create configmap app-settings', validate: (c) => c.resources.some(r => r.type === 'configmap' && r.name === 'app-settings') },
-      { id: 'cfg-4', task: 'Create a Secret called "db-password"', hint: 'kubectl create secret db-password', answer: 'kubectl create secret db-password', validate: (c) => c.resources.some(r => r.type === 'secret' && r.name === 'db-password') },
+      { id: 'cfg-3', task: 'Describe the "env-config" ConfigMap to inspect it', hint: 'kubectl describe configmap env-config', answer: 'kubectl describe configmap env-config', validate: (c) => c.resources.some(r => r.type === 'configmap' && r.name === 'env-config') },
+      { id: 'cfg-4', task: 'Create a ConfigMap called "app-settings"', hint: 'kubectl create configmap app-settings', answer: 'kubectl create configmap app-settings', validate: (c) => c.resources.some(r => r.type === 'configmap' && r.name === 'app-settings') },
+      { id: 'cfg-5', task: 'Create a Secret called "db-password"', hint: 'kubectl create secret db-password', answer: 'kubectl create secret db-password', validate: (c) => c.resources.some(r => r.type === 'secret' && r.name === 'db-password') },
+      { id: 'cfg-6', task: 'Delete the "app-settings" ConfigMap', hint: 'kubectl delete configmap app-settings', answer: 'kubectl delete configmap app-settings', validate: (c) => !c.resources.some(r => r.type === 'configmap' && r.name === 'app-settings') },
     ],
   },
   // ── SCHEDULING ──
@@ -754,8 +772,12 @@ kubectl label nodes node1 disktype=ssd</code></pre>
     hint: 'Use kubectl taint to add taints and kubectl cordon to mark nodes unschedulable.',
     challenges: [
       { id: 'sched-1', task: 'Taint node-1 with env=prod:NoSchedule', hint: 'kubectl taint nodes node-1 env=prod:NoSchedule', answer: 'kubectl taint nodes node-1 env=prod:NoSchedule', validate: (c) => c.resources.some(r => r.type === 'node' && r.name === 'node-1' && Array.isArray(r.metadata.taints) && (r.metadata.taints as string[]).some(t => t.startsWith('env='))) },
-      { id: 'sched-2', task: 'Cordon node-1 to prevent new scheduling', hint: 'kubectl cordon node-1', answer: 'kubectl cordon node-1', validate: (c) => c.resources.some(r => r.type === 'node' && r.name === 'node-1' && r.metadata.status === 'Ready,SchedulingDisabled') },
-      { id: 'sched-3', task: 'Uncordon node-1 to allow scheduling again', hint: 'kubectl uncordon node-1', answer: 'kubectl uncordon node-1', validate: (c) => c.resources.some(r => r.type === 'node' && r.name === 'node-1' && r.metadata.status === 'Ready') },
+      { id: 'sched-2', task: 'Label node-2 with disktype=ssd for nodeSelector targeting', hint: 'kubectl label nodes node-2 disktype=ssd', answer: 'kubectl label nodes node-2 disktype=ssd', validate: (c) => c.resources.some(r => r.type === 'node' && r.name === 'node-2' && r.labels.disktype === 'ssd') },
+      { id: 'sched-3', task: 'Cordon node-1 to prevent new scheduling', hint: 'kubectl cordon node-1', answer: 'kubectl cordon node-1', validate: (c) => c.resources.some(r => r.type === 'node' && r.name === 'node-1' && r.metadata.status === 'Ready,SchedulingDisabled') },
+      { id: 'sched-4', task: 'Drain node-1 to evict all pods (with --ignore-daemonsets)', hint: 'kubectl drain node-1 --ignore-daemonsets', answer: 'kubectl drain node-1 --ignore-daemonsets', validate: (c) => c.resources.some(r => r.type === 'node' && r.name === 'node-1' && r.metadata.status === 'Ready,SchedulingDisabled') },
+      { id: 'sched-5', task: 'Uncordon node-1 to allow scheduling again', hint: 'kubectl uncordon node-1', answer: 'kubectl uncordon node-1', validate: (c) => c.resources.some(r => r.type === 'node' && r.name === 'node-1' && r.metadata.status === 'Ready') },
+      { id: 'sched-6', task: 'Remove the taint from node-1 (env=prod:NoSchedule-)', hint: 'kubectl taint nodes node-1 env=prod:NoSchedule-', answer: 'kubectl taint nodes node-1 env=prod:NoSchedule-', validate: (c) => { const n = c.resources.find(r => r.type === 'node' && r.name === 'node-1'); const taints = (n?.metadata.taints as string[]) || []; return !taints.some(t => t.startsWith('env=')); } },
+      { id: 'sched-7', task: 'Label node-1 with tier=backend for workload targeting', hint: 'kubectl label nodes node-1 tier=backend', answer: 'kubectl label nodes node-1 tier=backend', validate: (c) => c.resources.some(r => r.type === 'node' && r.name === 'node-1' && r.labels.tier === 'backend') },
     ],
   },
   // ── SERVICES ──
@@ -890,6 +912,8 @@ kubectl get ingress</code></pre>
       { id: 'ing-1', task: 'Create a deployment "api" and expose it as a service on port 80', hint: 'kubectl create deployment api --image=nginx, then expose it', answer: 'kubectl create deployment api --image=nginx\nkubectl expose deployment api --port=80', validate: (c) => c.resources.some(r => r.type === 'service' && r.name === 'api') },
       { id: 'ing-2', task: 'Create an ingress called "api-ingress"', hint: 'kubectl create ingress <name>', answer: 'kubectl create ingress api-ingress', validate: (c) => c.resources.some(r => r.type === 'ingress' && r.name === 'api-ingress') },
       { id: 'ing-3', task: 'Create a second deployment "web", expose it, and create "web-ingress"', hint: 'Three commands: deployment, expose, ingress', answer: 'kubectl create deployment web --image=nginx\nkubectl expose deployment web --port=80\nkubectl create ingress web-ingress', validate: (c) => c.resources.some(r => r.type === 'ingress' && r.name === 'web-ingress') },
+      { id: 'ing-4', task: 'Describe the "api-ingress" to see its routing rules', hint: 'kubectl describe ingress api-ingress', answer: 'kubectl describe ingress api-ingress', validate: (c) => c.resources.some(r => r.type === 'ingress' && r.name === 'api-ingress') },
+      { id: 'ing-5', task: 'Delete the "web-ingress" resource', hint: 'kubectl delete ingress web-ingress', answer: 'kubectl delete ingress web-ingress', validate: (c) => !c.resources.some(r => r.type === 'ingress' && r.name === 'web-ingress') },
     ],
   },
   // ── NETWORK POLICIES ──
@@ -966,6 +990,9 @@ kubectl get networkpolicies</code></pre>
     challenges: [
       { id: 'np-1', task: 'Create a NetworkPolicy called "deny-all" for pods with app=web', hint: 'kubectl create networkpolicy deny-all --pod-selector=app=web', answer: 'kubectl create networkpolicy deny-all --pod-selector=app=web --policy-type=Ingress', validate: (c) => c.resources.some(r => r.type === 'networkpolicy' && r.name === 'deny-all') },
       { id: 'np-2', task: 'Create a NetworkPolicy called "allow-api" for the api pods', hint: 'kubectl create networkpolicy allow-api --pod-selector=app=api', answer: 'kubectl create networkpolicy allow-api --pod-selector=app=api', validate: (c) => c.resources.some(r => r.type === 'networkpolicy' && r.name === 'allow-api') },
+      { id: 'np-3', task: 'Describe the "deny-all" NetworkPolicy to inspect its rules', hint: 'kubectl describe networkpolicy deny-all', answer: 'kubectl describe networkpolicy deny-all', validate: (c) => c.resources.some(r => r.type === 'networkpolicy' && r.name === 'deny-all') },
+      { id: 'np-4', task: 'Create a NetworkPolicy called "egress-restrict" with Egress policy type', hint: 'kubectl create networkpolicy egress-restrict --pod-selector=app=db --policy-type=Egress', answer: 'kubectl create networkpolicy egress-restrict --pod-selector=app=db --policy-type=Egress', validate: (c) => c.resources.some(r => r.type === 'networkpolicy' && r.name === 'egress-restrict') },
+      { id: 'np-5', task: 'Delete the "allow-api" NetworkPolicy', hint: 'kubectl delete networkpolicy allow-api', answer: 'kubectl delete networkpolicy allow-api', validate: (c) => !c.resources.some(r => r.type === 'networkpolicy' && r.name === 'allow-api') },
     ],
   },
   // ── PERSISTENT VOLUMES ──
@@ -1041,7 +1068,10 @@ kubectl describe pv my-pv</code></pre>
     challenges: [
       { id: 'pv-1', task: 'Create a PersistentVolume called "data-pv" with 10Gi capacity', hint: 'kubectl create pv data-pv --capacity=10Gi', answer: 'kubectl create pv data-pv --capacity=10Gi', validate: (c) => c.resources.some(r => r.type === 'persistentvolume' && r.name === 'data-pv') },
       { id: 'pv-2', task: 'Create a PersistentVolumeClaim called "data-claim" requesting 5Gi', hint: 'kubectl create pvc data-claim --request=5Gi', answer: 'kubectl create pvc data-claim --request=5Gi', validate: (c) => c.resources.some(r => r.type === 'persistentvolumeclaim' && r.name === 'data-claim') },
-      { id: 'pv-3', task: 'Create another PV called "logs-pv" with 20Gi capacity', hint: 'kubectl create pv logs-pv --capacity=20Gi', answer: 'kubectl create pv logs-pv --capacity=20Gi', validate: (c) => c.resources.some(r => r.type === 'persistentvolume' && r.name === 'logs-pv') },
+      { id: 'pv-3', task: 'Describe the "data-pv" PersistentVolume to see its details', hint: 'kubectl describe persistentvolume data-pv', answer: 'kubectl describe persistentvolume data-pv', validate: (c) => c.resources.some(r => r.type === 'persistentvolume' && r.name === 'data-pv') },
+      { id: 'pv-4', task: 'Create another PV called "logs-pv" with 20Gi capacity', hint: 'kubectl create pv logs-pv --capacity=20Gi', answer: 'kubectl create pv logs-pv --capacity=20Gi', validate: (c) => c.resources.some(r => r.type === 'persistentvolume' && r.name === 'logs-pv') },
+      { id: 'pv-5', task: 'Create a PVC called "logs-claim" requesting 10Gi', hint: 'kubectl create pvc logs-claim --request=10Gi', answer: 'kubectl create pvc logs-claim --request=10Gi', validate: (c) => c.resources.some(r => r.type === 'persistentvolumeclaim' && r.name === 'logs-claim') },
+      { id: 'pv-6', task: 'Delete the "logs-pv" PersistentVolume', hint: 'kubectl delete persistentvolume logs-pv', answer: 'kubectl delete persistentvolume logs-pv', validate: (c) => !c.resources.some(r => r.type === 'persistentvolume' && r.name === 'logs-pv') },
     ],
   },
   // ── RBAC ──
@@ -1114,6 +1144,8 @@ kubectl auth can-i delete nodes</code></pre>
       { id: 'rbac-2', task: 'Create a Role called "pod-reader" with get,list,watch on pods', hint: 'kubectl create role pod-reader --verb=get,list,watch --resource=pods', answer: 'kubectl create role pod-reader --verb=get,list,watch --resource=pods', validate: (c) => c.resources.some(r => r.type === 'role' && r.name === 'pod-reader') },
       { id: 'rbac-3', task: 'Create a RoleBinding called "read-pods" binding the pod-reader role', hint: 'kubectl create rolebinding read-pods --role=pod-reader --serviceaccount=default:app-sa', answer: 'kubectl create rolebinding read-pods --role=pod-reader --serviceaccount=default:app-sa', validate: (c) => c.resources.some(r => r.type === 'rolebinding' && r.name === 'read-pods') },
       { id: 'rbac-4', task: 'Create a ClusterRole called "node-viewer" for viewing nodes', hint: 'kubectl create clusterrole node-viewer --verb=get,list --resource=nodes', answer: 'kubectl create clusterrole node-viewer --verb=get,list --resource=nodes', validate: (c) => c.resources.some(r => r.type === 'clusterrole' && r.name === 'node-viewer') },
+      { id: 'rbac-5', task: 'Create a ClusterRoleBinding called "view-nodes" binding node-viewer', hint: 'kubectl create clusterrolebinding view-nodes --clusterrole=node-viewer --serviceaccount=default:app-sa', answer: 'kubectl create clusterrolebinding view-nodes --clusterrole=node-viewer --serviceaccount=default:app-sa', validate: (c) => c.resources.some(r => r.type === 'clusterrolebinding' && r.name === 'view-nodes') },
+      { id: 'rbac-6', task: 'Check if you can get pods using auth can-i', hint: 'kubectl auth can-i get pods', answer: 'kubectl auth can-i get pods', validate: (c) => c.resources.some(r => r.type === 'role' && r.name === 'pod-reader') },
     ],
   },
   // ── POD SECURITY & PROBES ──
