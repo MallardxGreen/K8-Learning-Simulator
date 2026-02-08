@@ -17,6 +17,7 @@ interface CommandResult {
   message: string;
   resourcesCreated?: K8sResource[];
   resourcesDeleted?: string[];
+  contextSwitch?: string;
 }
 
 let nextId = 100;
@@ -93,7 +94,7 @@ function handleEtcdctl(state: ClusterState, tokens: string[]): { state: ClusterS
   return { state, result: { success: false, message: `Unknown etcdctl command "${sub}". Try "etcdctl help".` } };
 }
 
-export function parseAndExecute(state: ClusterState, input: string): { state: ClusterState; result: CommandResult } {
+export function parseAndExecute(state: ClusterState, input: string, contextInfo?: { active: string; available: string[] }): { state: ClusterState; result: CommandResult } {
   const trimmed = input.trim();
   if (trimmed.startsWith('etcdctl')) {
     return handleEtcdctl(state, trimmed.split(/\s+/).slice(1));
@@ -134,7 +135,7 @@ export function parseAndExecute(state: ClusterState, input: string): { state: Cl
       return { state, result: { success: true, message: getApiResourcesText() } };
     case 'api-versions':
       return { state, result: { success: true, message: 'apps/v1\nbatch/v1\nnetworking.k8s.io/v1\nrbac.authorization.k8s.io/v1\nstorage.k8s.io/v1\nv1' } };
-    case 'config': return handleConfig(state, tokens);
+    case 'config': return handleConfig(state, tokens, contextInfo);
     case 'help': return { state, result: { success: true, message: getHelpText() } };
     default:
       return { state, result: { success: false, message: `Unknown action "${action}". Type "kubectl help" for available commands.` } };
@@ -916,24 +917,22 @@ events                    ev           v1                             true      
 endpoints                 ep           v1                             true         Endpoints`;
 }
 
-function handleConfig(state: ClusterState, tokens: string[]): { state: ClusterState; result: CommandResult } {
+function handleConfig(state: ClusterState, tokens: string[], contextInfo?: { active: string; available: string[] }): { state: ClusterState; result: CommandResult } {
   const sub = tokens[0];
+  const active = contextInfo?.active || 'k8s-simulator';
+  const available = contextInfo?.available || ['k8s-simulator'];
+
   if (sub === 'view') {
+    const clustersYaml = available.map(c => `- cluster:\n    server: https://${c}.local:6443\n    certificate-authority-data: DATA+OMITTED\n  name: ${c}`).join('\n');
+    const contextsYaml = available.map(c => `- context:\n    cluster: ${c}\n    user: admin\n    namespace: default\n  name: ${c}`).join('\n');
     return { state, result: { success: true, message:
 `apiVersion: v1
 kind: Config
 clusters:
-- cluster:
-    server: https://127.0.0.1:6443
-    certificate-authority-data: DATA+OMITTED
-  name: k8s-simulator
+${clustersYaml}
 contexts:
-- context:
-    cluster: k8s-simulator
-    user: admin
-    namespace: default
-  name: k8s-simulator
-current-context: k8s-simulator
+${contextsYaml}
+current-context: ${active}
 users:
 - name: admin
   user:
@@ -941,12 +940,24 @@ users:
     client-key-data: DATA+OMITTED` } };
   }
   if (sub === 'current-context') {
-    return { state, result: { success: true, message: 'k8s-simulator' } };
+    return { state, result: { success: true, message: active } };
   }
   if (sub === 'get-contexts') {
-    return { state, result: { success: true, message:
-`CURRENT   NAME             CLUSTER          AUTHINFO   NAMESPACE
-*         k8s-simulator    k8s-simulator    admin      default` } };
+    const lines = available.map(c => `${c === active ? '*' : ' '}         ${c.padEnd(17)}${c.padEnd(17)}admin      default`);
+    return { state, result: { success: true, message: `CURRENT   NAME             CLUSTER          AUTHINFO   NAMESPACE\n${lines.join('\n')}` } };
   }
-  return { state, result: { success: false, message: `Unknown config subcommand "${sub}". Try: view, current-context, get-contexts` } };
+  if (sub === 'use-context') {
+    const target = tokens[1];
+    if (!target) return { state, result: { success: false, message: 'Usage: kubectl config use-context <context-name>' } };
+    if (!available.includes(target)) {
+      return { state, result: { success: false, message: `error: no context exists with the name: "${target}"\nAvailable contexts: ${available.join(', ')}` } };
+    }
+    return { state, result: { success: true, message: `Switched to context "${target}".`, contextSwitch: target } };
+  }
+  if (sub === 'set-context') {
+    const target = tokens[1];
+    if (!target) return { state, result: { success: false, message: 'Usage: kubectl config set-context <name>' } };
+    return { state, result: { success: true, message: `Context "${target}" created.`, contextSwitch: `__create__${target}` } };
+  }
+  return { state, result: { success: false, message: `Unknown config subcommand "${sub}". Try: view, current-context, get-contexts, use-context, set-context` } };
 }

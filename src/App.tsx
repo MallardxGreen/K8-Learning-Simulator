@@ -41,14 +41,16 @@ function saveProgress(progress: UserProgress) {
 
 export default function App() {
   const [progress, setProgress] = useState<UserProgress>(loadProgress);
-  const [cluster, setCluster] = useState<ClusterState>(makeInitialCluster);
+  const [clusters, setClusters] = useState<Record<string, ClusterState>>({ 'k8s-simulator': makeInitialCluster() });
+  const [activeContext, setActiveContext] = useState('k8s-simulator');
+  const cluster = clusters[activeContext] || makeInitialCluster();
   const [activeTab, setActiveTab] = useState<'learn' | 'practice'>('learn');
   const currentLesson = lessons.find(l => l.id === progress.currentLesson) || lessons[0];
   const currentIdx = lessons.findIndex(l => l.id === currentLesson.id);
 
   useEffect(() => {
-    setCluster(makeInitialCluster());
-  }, [currentLesson.id]);
+    setClusters(prev => ({ ...prev, [activeContext]: makeInitialCluster() }));
+  }, [currentLesson.id, activeContext]);
 
   const updateProgress = useCallback((update: Partial<UserProgress>) => {
     setProgress(prev => {
@@ -79,16 +81,31 @@ export default function App() {
   }, [currentIdx, selectLesson]);
 
   const handleCommand = useCallback((cmd: string) => {
-    const { state: newState, result } = parseAndExecute(cluster, cmd);
-    setCluster(newState);
+    const contextInfo = { active: activeContext, available: Object.keys(clusters) };
+    const { state: newState, result } = parseAndExecute(cluster, cmd, contextInfo);
+    if (result.contextSwitch) {
+      if (result.contextSwitch.startsWith('__create__')) {
+        const newName = result.contextSwitch.slice(10);
+        if (!clusters[newName]) {
+          setClusters(prev => ({ ...prev, [activeContext]: newState, [newName]: makeInitialCluster() }));
+        }
+        setActiveContext(newName);
+      } else {
+        setClusters(prev => ({ ...prev, [activeContext]: newState }));
+        setActiveContext(result.contextSwitch);
+      }
+    } else {
+      setClusters(prev => ({ ...prev, [activeContext]: newState }));
+    }
     return result;
-  }, [cluster]);
+  }, [cluster, activeContext, clusters]);
 
   const resetProgress = useCallback(() => {
     const fresh: UserProgress = { completedLessons: [], completedChallenges: [], currentLesson: lessons[0].id };
     setProgress(fresh);
     saveProgress(fresh);
-    setCluster(makeInitialCluster());
+    setClusters({ 'k8s-simulator': makeInitialCluster() });
+    setActiveContext('k8s-simulator');
     setActiveTab('learn');
   }, []);
 
@@ -132,6 +149,7 @@ export default function App() {
             </button>
           )}
           <div className="ml-auto flex items-center gap-3">
+            <span className="text-xs px-2 py-0.5 rounded bg-indigo-900/50 text-indigo-300 border border-indigo-700">⎈ {activeContext}</span>
             <span className="text-xs text-gray-600">{currentLesson.title}</span>
             {currentLesson.challenges && currentLesson.challenges.length > 0 && (
               <span className="text-xs text-amber-500">
