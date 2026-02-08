@@ -194,9 +194,14 @@ nginx@sha256:abc123...</code></pre>
 </div>
 `,
     example: 'kubectl get nodes',
-    expectedCommands: [],
-    hint: 'This is a theory lesson — review container runtimes, CRI, and OCI standards above.',
-    challenges: [],
+    expectedCommands: ['kubectl get nodes', 'kubectl run', 'kubectl describe'],
+    hint: 'Create pods with different container images to explore how runtimes work.',
+    challenges: [
+      { id: 'cri-1', task: 'Create a pod "nginx-container" using the nginx image', hint: 'kubectl run nginx-container --image=nginx', answer: 'kubectl run nginx-container --image=nginx', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'nginx-container') },
+      { id: 'cri-2', task: 'Create a pod "alpine-shell" using the alpine image', hint: 'kubectl run alpine-shell --image=alpine', answer: 'kubectl run alpine-shell --image=alpine', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'alpine-shell' && r.metadata.image === 'alpine') },
+      { id: 'cri-3', task: 'Create a pod "busybox-tools" using the busybox image', hint: 'kubectl run busybox-tools --image=busybox', answer: 'kubectl run busybox-tools --image=busybox', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'busybox-tools' && r.metadata.image === 'busybox') },
+      { id: 'cri-4', task: 'Create a deployment "multi-runtime" with 2 replicas', hint: 'kubectl create deployment multi-runtime --image=nginx --replicas=2', answer: 'kubectl create deployment multi-runtime --image=nginx --replicas=2', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'multi-runtime') },
+    ],
   },
   // ── PODS ──
   {
@@ -1336,10 +1341,16 @@ helm template my-release bitnami/nginx</code></pre>
   <strong>💡 KCNA Tip:</strong> Helm is a CNCF <em>graduated</em> project. Know the difference between Helm 2 (with Tiller) and Helm 3 (no Tiller). A chart is a package, a release is an instance. Helm uses Go templates. <code>helm install</code>, <code>helm upgrade</code>, and <code>helm rollback</code> are the key lifecycle commands.
 </div>
 `,
-    example: 'helm install my-release bitnami/nginx',
-    expectedCommands: [],
-    hint: 'This is a theory lesson — review Helm concepts, chart structure, and commands above.',
-    challenges: [],
+    example: 'kubectl create deployment chart-app --image=nginx',
+    expectedCommands: ['kubectl create deployment', 'kubectl expose', 'kubectl create configmap'],
+    hint: 'Simulate what a Helm chart would deploy: a deployment, service, configmap, and secret.',
+    challenges: [
+      { id: 'helm-1', task: 'Create a deployment "chart-app" (simulating a Helm release)', hint: 'kubectl create deployment chart-app --image=nginx --replicas=3', answer: 'kubectl create deployment chart-app --image=nginx --replicas=3', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'chart-app') },
+      { id: 'helm-2', task: 'Expose "chart-app" as a service on port 80', hint: 'kubectl expose deployment chart-app --port=80', answer: 'kubectl expose deployment chart-app --port=80', validate: (c) => c.resources.some(r => r.type === 'service' && r.name === 'chart-app') },
+      { id: 'helm-3', task: 'Create a configmap "chart-config" for the release values', hint: 'kubectl create configmap chart-config', answer: 'kubectl create configmap chart-config', validate: (c) => c.resources.some(r => r.type === 'configmap' && r.name === 'chart-config') },
+      { id: 'helm-4', task: 'Create a secret "chart-secret" for sensitive values', hint: 'kubectl create secret chart-secret', answer: 'kubectl create secret chart-secret', validate: (c) => c.resources.some(r => r.type === 'secret' && r.name === 'chart-secret') },
+      { id: 'helm-5', task: 'Create a service account "chart-sa" for the release', hint: 'kubectl create sa chart-sa', answer: 'kubectl create sa chart-sa', validate: (c) => c.resources.some(r => r.type === 'serviceaccount' && r.name === 'chart-sa') },
+    ],
   },
   // ── GITOPS & CI/CD ──
   {
@@ -1431,10 +1442,16 @@ spec:
   <strong>💡 KCNA Tip:</strong> ArgoCD and Flux are both CNCF graduated projects. GitOps uses Git as the single source of truth with a pull-based reconciliation model. Know the four GitOps principles: declarative, versioned, pulled automatically, continuously reconciled. Push-based deployment (CI applies directly) is less secure than pull-based (GitOps operator in cluster).
 </div>
 `,
-    example: 'kubectl get pods -n argocd',
-    expectedCommands: [],
-    hint: 'This is a theory lesson — review GitOps principles, ArgoCD, and Flux above.',
-    challenges: [],
+    example: 'kubectl create namespace argocd',
+    expectedCommands: ['kubectl create namespace', 'kubectl create deployment', 'kubectl get pods'],
+    hint: 'Simulate a GitOps setup: create namespaces, deploy apps, and set up service accounts.',
+    challenges: [
+      { id: 'git-1', task: 'Create a namespace "argocd" for the GitOps controller', hint: 'kubectl create namespace argocd', answer: 'kubectl create namespace argocd', validate: (c) => c.resources.some(r => r.type === 'namespace' && r.name === 'argocd') },
+      { id: 'git-2', task: 'Create a deployment "argocd-server" in the argocd namespace', hint: 'kubectl create deployment argocd-server --image=argoproj/argocd -n argocd', answer: 'kubectl create deployment argocd-server --image=argoproj/argocd -n argocd', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'argocd-server' && r.namespace === 'argocd') },
+      { id: 'git-3', task: 'Create a namespace "staging" for a GitOps-managed environment', hint: 'kubectl create namespace staging', answer: 'kubectl create namespace staging', validate: (c) => c.resources.some(r => r.type === 'namespace' && r.name === 'staging') },
+      { id: 'git-4', task: 'Deploy "web-app" in the staging namespace', hint: 'kubectl create deployment web-app --image=nginx -n staging', answer: 'kubectl create deployment web-app --image=nginx -n staging', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'web-app' && r.namespace === 'staging') },
+      { id: 'git-5', task: 'Create a service account "gitops-sa" in the argocd namespace', hint: 'kubectl create sa gitops-sa -n argocd', answer: 'kubectl create sa gitops-sa -n argocd', validate: (c) => c.resources.some(r => r.type === 'serviceaccount' && r.name === 'gitops-sa' && r.namespace === 'argocd') },
+    ],
   },
   // ── OBSERVABILITY ──
   {
@@ -1688,10 +1705,17 @@ spec:
   <strong>💡 KCNA Tip:</strong> Envoy and Linkerd are CNCF graduated projects. Istio is not a CNCF project (it's under the Istio steering committee). Know the sidecar pattern: a proxy container is injected into each Pod. Service meshes provide mTLS, traffic management, and observability. The data plane (proxies) handles traffic; the control plane manages configuration.
 </div>
 `,
-    example: 'kubectl get pods',
-    expectedCommands: [],
-    hint: 'This is a theory lesson — review service mesh concepts, sidecar pattern, and Istio above.',
-    challenges: [],
+    example: 'kubectl create namespace istio-system',
+    expectedCommands: ['kubectl create namespace', 'kubectl create deployment', 'kubectl expose'],
+    hint: 'Simulate a service mesh setup: create the mesh namespace, deploy services, and expose them.',
+    challenges: [
+      { id: 'mesh-1', task: 'Create a namespace "istio-system" for the mesh control plane', hint: 'kubectl create namespace istio-system', answer: 'kubectl create namespace istio-system', validate: (c) => c.resources.some(r => r.type === 'namespace' && r.name === 'istio-system') },
+      { id: 'mesh-2', task: 'Create a deployment "istiod" in istio-system (the control plane)', hint: 'kubectl create deployment istiod --image=istio/pilot -n istio-system', answer: 'kubectl create deployment istiod --image=istio/pilot -n istio-system', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'istiod' && r.namespace === 'istio-system') },
+      { id: 'mesh-3', task: 'Create a deployment "frontend" to simulate a meshed service', hint: 'kubectl create deployment frontend --image=nginx', answer: 'kubectl create deployment frontend --image=nginx', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'frontend') },
+      { id: 'mesh-4', task: 'Create a deployment "backend-api" as a second meshed service', hint: 'kubectl create deployment backend-api --image=node', answer: 'kubectl create deployment backend-api --image=node', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'backend-api') },
+      { id: 'mesh-5', task: 'Expose "frontend" as a service on port 80', hint: 'kubectl expose deployment frontend --port=80', answer: 'kubectl expose deployment frontend --port=80', validate: (c) => c.resources.some(r => r.type === 'service' && r.name === 'frontend') },
+      { id: 'mesh-6', task: 'Expose "backend-api" as a service on port 3000', hint: 'kubectl expose deployment backend-api --port=3000', answer: 'kubectl expose deployment backend-api --port=3000', validate: (c) => c.resources.some(r => r.type === 'service' && r.name === 'backend-api') },
+    ],
   },
   // ── INTERVIEW & TROUBLESHOOTING LABS ──
   {
