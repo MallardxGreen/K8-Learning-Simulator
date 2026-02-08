@@ -52,10 +52,51 @@ function normalizeType(input: string): string {
 
 const CLUSTER_SCOPED = ['namespace', 'persistentvolume', 'clusterrole', 'clusterrolebinding', 'node'];
 
+function handleEtcdctl(state: ClusterState, tokens: string[]): { state: ClusterState; result: CommandResult } {
+  const sub = tokens[0];
+  if (sub === 'get' || sub === 'get-keys' || sub === 'ls') {
+    const prefix = tokens[1] || '';
+    // Build etcd-style key listing from cluster resources
+    const keys: string[] = [];
+    for (const r of state.resources) {
+      const ns = r.namespace ? `/namespaces/${r.namespace}` : '';
+      const key = `/registry/${r.type}s${ns}/${r.name}`;
+      if (!prefix || key.startsWith(prefix)) keys.push(key);
+    }
+    keys.sort();
+    if (keys.length === 0) {
+      return { state, result: { success: true, message: prefix ? `No keys found with prefix "${prefix}"` : 'No keys found in etcd.' } };
+    }
+    return { state, result: { success: true, message: keys.join('\n') } };
+  }
+  if (sub === 'endpoint' && tokens[1] === 'status') {
+    const total = state.resources.length;
+    return { state, result: { success: true, message: `https://127.0.0.1:2379, ${total} keys, 24MB, true, false, 3, ${total}, ${total}` } };
+  }
+  if (sub === 'member' && tokens[1] === 'list') {
+    return { state, result: { success: true, message: 'a]1b2c3d4e5f6, started, etcd-master, https://127.0.0.1:2380, https://127.0.0.1:2379, false' } };
+  }
+  if (sub === 'help' || !sub) {
+    return { state, result: { success: true, message:
+      'Simulated etcdctl commands:\n' +
+      '  etcdctl get /registry/          — list all keys (or filter by prefix)\n' +
+      '  etcdctl get-keys                — alias for get\n' +
+      '  etcdctl ls                      — alias for get\n' +
+      '  etcdctl endpoint status         — show endpoint status\n' +
+      '  etcdctl member list             — list cluster members\n' +
+      '  etcdctl help                    — show this help'
+    } };
+  }
+  return { state, result: { success: false, message: `Unknown etcdctl command "${sub}". Try "etcdctl help".` } };
+}
+
 export function parseAndExecute(state: ClusterState, input: string): { state: ClusterState; result: CommandResult } {
   const trimmed = input.trim();
+  if (trimmed.startsWith('etcdctl')) {
+    return handleEtcdctl(state, trimmed.split(/\s+/).slice(1));
+  }
   if (!trimmed.startsWith('kubectl')) {
-    return { state, result: { success: false, message: `Unknown command. Commands start with "kubectl".` } };
+    return { state, result: { success: false, message: `Unknown command. Commands start with "kubectl" or "etcdctl".` } };
   }
 
   const tokens = trimmed.split(/\s+/);
