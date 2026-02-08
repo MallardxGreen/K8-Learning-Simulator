@@ -129,6 +129,7 @@ function assignNode(name: string, nodeCount: number): number {
 export default function LiveDiagram({ cluster }: LiveDiagramProps) {
   const [zoom, setZoom] = useState(0.85);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [cpExpanded, setCpExpanded] = useState(false);
   const isPanning = useRef(false);
   const lastMouse = useRef({ x: 0, y: 0 });
 
@@ -228,7 +229,7 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
   const layout = useMemo(() => {
     const PAD = 28;
     const CP_W = 520;
-    const CP_H = 76;
+    const CP_H = cpExpanded ? 220 : 76;
     const NODE_PAD = 18;
     const NODE_HEADER = 46;
 
@@ -318,16 +319,14 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
         if (!byNs.has(ns)) byNs.set(ns, []);
         byNs.get(ns)!.push(r);
       }
-      const defaultNsW = COLS * (CARD_W + GAP) + NS_PAD * 2 - GAP;
-      let nlX = PAD;
       cursorY += 20;
+      const nsCols = 4;
       for (const [nsName, resources] of [...byNs.entries()].sort(([a], [b]) => a === 'default' ? -1 : b === 'default' ? 1 : a.localeCompare(b))) {
         const { trees, orphans } = buildOwnershipTrees(resources);
         const treeSizes = trees.map(t => measureTree(t));
         const maxTreeW = treeSizes.length > 0 ? Math.max(...treeSizes.map(s => s.w)) : 0;
-        const nsCols = 3;
         const orphanColW = nsCols * (CARD_W + GAP) - GAP;
-        const boxW = Math.max(defaultNsW, maxTreeW + NS_PAD * 2, orphanColW + NS_PAD * 2);
+        const boxW = Math.max(nodesMaxW, maxTreeW + NS_PAD * 2, orphanColW + NS_PAD * 2);
 
         let contentH = 24; // namespace label
         for (const size of treeSizes) {
@@ -340,15 +339,9 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
         if (trees.length > 0 || orphans.length > 0) contentH -= GAP;
         const boxH = NS_PAD + contentH + NS_PAD;
 
-        if (nlX + boxW > nodesMaxW + PAD * 2) {
-          nlX = PAD;
-          cursorY += boxH + GAP;
-        }
-        nsLevelLayouts.push({ nsName, x: nlX, y: cursorY, w: boxW, h: boxH, trees, orphans });
-        nlX += boxW + GAP;
+        nsLevelLayouts.push({ nsName, x: PAD, y: cursorY, w: boxW, h: boxH, trees, orphans });
+        cursorY += boxH + GAP;
       }
-      const maxNlH = nsLevelLayouts.length > 0 ? Math.max(...nsLevelLayouts.map(n => n.h)) : 0;
-      cursorY += maxNlH + 20;
     }
 
     // Cluster-scoped resources
@@ -373,7 +366,7 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
     const totalH = Math.max(cursorY + PAD, 280);
 
     return { totalW, totalH, cpX, cpY, CP_W, CP_H, nodeLayouts, nsLevelLayouts, csLayouts };
-  }, [nodeData, nsLevelRes, clusterScoped]);
+  }, [nodeData, nsLevelRes, clusterScoped, cpExpanded]);
 
   // Zoom/pan handlers
   const zoomIn = useCallback(() => setZoom(z => Math.min(3, z + 0.15)), []);
@@ -387,6 +380,7 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button !== 0) return;
+    e.preventDefault();
     isPanning.current = true;
     lastMouse.current = { x: e.clientX, y: e.clientY };
   }, []);
@@ -503,11 +497,16 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
 
             {/* Control Plane */}
             <rect x={layout.cpX} y={layout.cpY} width={layout.CP_W} height={layout.CP_H} rx={10} fill="#0f172a" stroke="#6366f1" strokeWidth={1.5} />
-            <g style={{ cursor: 'pointer' }}>
-              <title>Control Plane (Master Node) — The brain of the cluster. Manages scheduling, state, and API access. Runs: API Server, etcd, Scheduler, Controller Manager.</title>
-              <text x={layout.cpX + 14} y={layout.cpY + 20} fill="#a78bfa" fontSize={10} fontWeight={700} fontFamily="system-ui">🧠 Control Plane (Master)</text>
+            <g style={{ cursor: 'pointer' }} onClick={() => setCpExpanded(e => !e)}>
+              <title>Control Plane (Master Node) — Click to {cpExpanded ? 'collapse' : 'expand'}. The brain of the cluster.</title>
+              <text x={layout.cpX + 14} y={layout.cpY + 20} fill="#a78bfa" fontSize={10} fontWeight={700} fontFamily="system-ui">
+                {cpExpanded ? '▼' : '▶'} 🧠 Control Plane (Master)
+              </text>
+              <text x={layout.cpX + layout.CP_W - 14} y={layout.cpY + 20} fill="#6366f1" fontSize={9} textAnchor="end" fontFamily="system-ui">
+                {cpExpanded ? 'click to collapse' : 'click to expand'}
+              </text>
             </g>
-            {['API Server', 'etcd', 'Scheduler', 'Controller Mgr'].map((comp, i) => {
+            {!cpExpanded && ['API Server', 'etcd', 'Scheduler', 'Controller Mgr'].map((comp, i) => {
               const cx = layout.cpX + 14 + i * 124;
               const cy = layout.cpY + 32;
               return (
@@ -518,6 +517,39 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
                 </g>
               );
             })}
+            {cpExpanded && (() => {
+              const userRes = cluster.resources.filter(r => r.type !== 'node');
+              const typeCounts = new Map<string, number>();
+              for (const r of userRes) typeCounts.set(r.type, (typeCounts.get(r.type) || 0) + 1);
+              const compCards = [
+                { name: 'API Server', icon: '🔌', desc: 'REST API gateway', color: '#6366f1' },
+                { name: 'Scheduler', icon: '📋', desc: 'Pod placement', color: '#0ea5e9' },
+                { name: 'Controller Mgr', icon: '⚙️', desc: 'State reconciliation', color: '#10b981' },
+                { name: 'etcd', icon: '💾', desc: `${userRes.length} objects stored`, color: '#f59e0b' },
+              ];
+              return (
+                <>
+                  {compCards.map((comp, i) => {
+                    const cx = layout.cpX + 14 + (i % 2) * 250;
+                    const cy = layout.cpY + 32 + Math.floor(i / 2) * 56;
+                    const isEtcd = comp.name === 'etcd';
+                    return (
+                      <g key={comp.name} style={{ cursor: 'pointer' }}>
+                        <title>{CP_INFO[comp.name]}</title>
+                        <rect x={cx} y={cy} width={236} height={isEtcd ? 48 : 42} rx={8} fill="#1e1b4b" stroke={comp.color} strokeWidth={1.5} />
+                        <text x={cx + 12} y={cy + 18} fill={comp.color} fontSize={11} fontWeight={700} fontFamily="system-ui">{comp.icon} {comp.name}</text>
+                        <text x={cx + 12} y={cy + 32} fill="#94a3b8" fontSize={9} fontFamily="system-ui">{comp.desc}</text>
+                        {isEtcd && (
+                          <text x={cx + 12} y={cy + 44} fill="#64748b" fontSize={8} fontFamily="system-ui">
+                            {[...typeCounts.entries()].map(([t, n]) => `${t}:${n}`).join('  ')}
+                          </text>
+                        )}
+                      </g>
+                    );
+                  })}
+                </>
+              );
+            })()}
 
             {/* Worker Nodes */}
             {layout.nodeLayouts.map(n => (
@@ -609,8 +641,8 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
                           treeH += measureTree(tree).h + GAP;
                         }
                         return nl.orphans.map((r, i) => {
-                          const col = i % 3;
-                          const row = Math.floor(i / 3);
+                          const col = i % 4;
+                          const row = Math.floor(i / 4);
                           const rx = nl.x + NS_PAD + col * (CARD_W + GAP);
                           const ry = nl.y + NS_PAD + treeH + row * (CARD_H + GAP);
                           return renderCard(r, rx, ry);
