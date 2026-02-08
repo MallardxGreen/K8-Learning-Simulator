@@ -16,6 +16,11 @@ const categoryIcons: Record<string, string> = {
   'Configuration': '⚙️',
   'Cloud Native': '☁️',
   'Interview Labs': '🎯',
+  'Storage': '💾',
+  'Security & RBAC': '🛡️',
+  'Scheduling': '📅',
+  'Observability': '📊',
+  'App Delivery': '🚢',
 };
 
 export default function Sidebar({ currentLessonId, progress, onSelectLesson, onResetProgress }: SidebarProps) {

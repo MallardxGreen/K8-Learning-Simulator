@@ -11,10 +11,22 @@ const RESOURCE_STYLE: Record<string, { emoji: string; bg: string; border: string
   pod:        { emoji: '🐳', bg: '#1e3a5f', border: '#3b82f6', text: '#93c5fd' },
   deployment: { emoji: '🚀', bg: '#064e3b', border: '#10b981', text: '#6ee7b7' },
   replicaset: { emoji: '📋', bg: '#134e4a', border: '#14b8a6', text: '#5eead4' },
+  statefulset:{ emoji: '🗄️', bg: '#064e3b', border: '#059669', text: '#6ee7b7' },
+  daemonset:  { emoji: '👹', bg: '#365314', border: '#84cc16', text: '#bef264' },
+  job:        { emoji: '⚡', bg: '#713f12', border: '#eab308', text: '#fde047' },
+  cronjob:    { emoji: '⏰', bg: '#78350f', border: '#d97706', text: '#fcd34d' },
   service:    { emoji: '🌐', bg: '#78350f', border: '#f59e0b', text: '#fde68a' },
   configmap:  { emoji: '⚙️', bg: '#334155', border: '#64748b', text: '#cbd5e1' },
   secret:     { emoji: '🔒', bg: '#7f1d1d', border: '#ef4444', text: '#fca5a5' },
   ingress:    { emoji: '🔀', bg: '#4c1d95', border: '#7c3aed', text: '#c4b5fd' },
+  persistentvolume: { emoji: '💾', bg: '#1e3a5f', border: '#2563eb', text: '#93c5fd' },
+  persistentvolumeclaim: { emoji: '📎', bg: '#1e3a5f', border: '#3b82f6', text: '#93c5fd' },
+  serviceaccount: { emoji: '👤', bg: '#334155', border: '#94a3b8', text: '#e2e8f0' },
+  role:       { emoji: '🛡️', bg: '#4c1d95', border: '#8b5cf6', text: '#c4b5fd' },
+  clusterrole:{ emoji: '🛡️', bg: '#4c1d95', border: '#a78bfa', text: '#ddd6fe' },
+  rolebinding:{ emoji: '🔗', bg: '#4c1d95', border: '#7c3aed', text: '#c4b5fd' },
+  clusterrolebinding: { emoji: '🔗', bg: '#4c1d95', border: '#a78bfa', text: '#ddd6fe' },
+  networkpolicy: { emoji: '🔥', bg: '#7f1d1d', border: '#dc2626', text: '#fca5a5' },
 };
 
 const SYSTEM_NAMES = new Set(['default', 'kube-system', 'node-1', 'node-2']);

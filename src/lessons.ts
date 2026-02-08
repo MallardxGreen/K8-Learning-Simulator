@@ -916,6 +916,416 @@ kubectl scale deployment/worker --replicas=1</code></pre>
       { id: 'lab5-3', task: 'Scale everything back down: frontend=2, api=1, worker=1', hint: 'Three more scale commands with lower numbers', answer: 'kubectl scale deployment/frontend --replicas=2\nkubectl scale deployment/api --replicas=1\nkubectl scale deployment/worker --replicas=1', validate: (c) => { const f = c.resources.find(r => r.type === 'deployment' && r.name === 'frontend'); const a = c.resources.find(r => r.type === 'deployment' && r.name === 'api'); const w = c.resources.find(r => r.type === 'deployment' && r.name === 'worker'); return f?.metadata.replicas === 2 && a?.metadata.replicas === 1 && w?.metadata.replicas === 1; } },
     ],
   },
+  // ── STATEFULSETS ──
+  {
+    id: 'statefulsets',
+    title: 'StatefulSets',
+    category: 'Workloads',
+    content: `
+<h2>StatefulSets</h2>
+<p>A <strong>StatefulSet</strong> manages stateful applications. Unlike Deployments, StatefulSets provide guarantees about the <strong>ordering and uniqueness</strong> of Pods.</p>
+
+<h3>StatefulSet vs Deployment</h3>
+<table>
+  <tr><th>Feature</th><th>Deployment</th><th>StatefulSet</th></tr>
+  <tr><td>Pod names</td><td>Random hash (e.g., web-7d9f5)</td><td>Ordered index (e.g., web-0, web-1, web-2)</td></tr>
+  <tr><td>Scaling</td><td>All at once (parallel)</td><td>One at a time (ordered)</td></tr>
+  <tr><td>Storage</td><td>Shared or none</td><td>Each Pod gets its own PersistentVolume</td></tr>
+  <tr><td>Network identity</td><td>Random</td><td>Stable DNS name per Pod</td></tr>
+  <tr><td>Use case</td><td>Stateless apps (web servers, APIs)</td><td>Databases, message queues, distributed systems</td></tr>
+</table>
+
+<h3>Key Properties</h3>
+<ul>
+  <li><strong>Stable network identity:</strong> Each Pod gets a predictable hostname: <code>&lt;statefulset-name&gt;-&lt;ordinal&gt;</code></li>
+  <li><strong>Ordered deployment:</strong> Pods are created sequentially (0, 1, 2...) and deleted in reverse</li>
+  <li><strong>Stable storage:</strong> Each Pod gets its own PersistentVolumeClaim via <code>volumeClaimTemplates</code></li>
+  <li><strong>Headless Service required:</strong> A Service with <code>clusterIP: None</code> controls the network domain</li>
+</ul>
+
+<h3>DNS for StatefulSet Pods</h3>
+<pre><code>&lt;pod-name&gt;.&lt;headless-service&gt;.&lt;namespace&gt;.svc.cluster.local
+# Example: mysql-0.mysql-headless.default.svc.cluster.local</code></pre>
+
+<h3>Common Use Cases</h3>
+<ul>
+  <li>Databases: MySQL, PostgreSQL, MongoDB replicas</li>
+  <li>Message queues: Kafka, RabbitMQ</li>
+  <li>Distributed systems: Elasticsearch, ZooKeeper, etcd</li>
+</ul>
+
+<div class="info-box">
+  <strong>💡 KCNA Tip:</strong> StatefulSets are for apps that need stable identity and persistent storage. Deployments are for stateless apps. Know when to use each.
+</div>
+
+<h3>🧪 Commands to Try</h3>
+<pre><code># Create a StatefulSet (auto-creates headless service)
+kubectl create statefulset mysql --image=mysql --replicas=3
+
+# See the ordered pods: mysql-0, mysql-1, mysql-2
+kubectl get pods
+
+# Scale the StatefulSet
+kubectl scale statefulset/mysql --replicas=5
+
+# Scale down (removes in reverse: mysql-4 first, then mysql-3)
+kubectl scale statefulset/mysql --replicas=2</code></pre>
+`,
+    example: 'kubectl create statefulset mysql --image=mysql --replicas=3',
+    expectedCommands: ['kubectl create statefulset', 'kubectl scale statefulset', 'kubectl get pods'],
+    hint: 'StatefulSets create pods with ordered names: name-0, name-1, name-2...',
+    challenges: [
+      { id: 'ss-1', task: 'Create a StatefulSet called "db" with 3 replicas', hint: 'kubectl create statefulset db --image=mysql --replicas=3', answer: 'kubectl create statefulset db --image=mysql --replicas=3', validate: (c) => { const ss = c.resources.find(r => r.type === 'statefulset' && r.name === 'db'); return ss !== undefined && ss.metadata.replicas === 3; } },
+      { id: 'ss-2', task: 'Scale "db" StatefulSet to 5 replicas', hint: 'kubectl scale statefulset/db --replicas=5', answer: 'kubectl scale statefulset/db --replicas=5', validate: (c) => { const ss = c.resources.find(r => r.type === 'statefulset' && r.name === 'db'); return ss?.metadata.replicas === 5; } },
+      { id: 'ss-3', task: 'Scale "db" back down to 2 replicas', hint: 'kubectl scale statefulset/db --replicas=2', answer: 'kubectl scale statefulset/db --replicas=2', validate: (c) => { const ss = c.resources.find(r => r.type === 'statefulset' && r.name === 'db'); return ss?.metadata.replicas === 2; } },
+    ],
+  },
+  // ── DAEMONSETS ──
+  {
+    id: 'daemonsets',
+    title: 'DaemonSets',
+    category: 'Workloads',
+    content: `
+<h2>DaemonSets</h2>
+<p>A <strong>DaemonSet</strong> ensures that <strong>all (or some) nodes</strong> run a copy of a Pod. When nodes are added to the cluster, Pods are added to them. When nodes are removed, those Pods are garbage collected.</p>
+
+<h3>Common Use Cases</h3>
+<ul>
+  <li><strong>Log collection:</strong> Fluentd, Filebeat on every node</li>
+  <li><strong>Monitoring agents:</strong> Prometheus Node Exporter, Datadog agent</li>
+  <li><strong>Network plugins:</strong> Calico, Cilium, kube-proxy</li>
+  <li><strong>Storage daemons:</strong> GlusterFS, Ceph on every node</li>
+</ul>
+
+<h3>DaemonSet vs Deployment</h3>
+<table>
+  <tr><th>Feature</th><th>Deployment</th><th>DaemonSet</th></tr>
+  <tr><td>Pod count</td><td>You specify replicas</td><td>One per node (automatic)</td></tr>
+  <tr><td>Scheduling</td><td>Scheduler decides which nodes</td><td>Runs on ALL matching nodes</td></tr>
+  <tr><td>Scaling</td><td>Manual or HPA</td><td>Scales with cluster size</td></tr>
+  <tr><td>Use case</td><td>Application workloads</td><td>Node-level infrastructure</td></tr>
+</table>
+
+<h3>Node Selection</h3>
+<p>You can limit which nodes run the DaemonSet using <code>nodeSelector</code> or <code>nodeAffinity</code>.</p>
+
+<div class="info-box">
+  <strong>💡 KCNA Tip:</strong> DaemonSets automatically add tolerations for node conditions (not-ready, unreachable, disk-pressure, etc.) so they can run on problematic nodes. This is critical for infrastructure components.
+</div>
+
+<h3>🧪 Commands to Try</h3>
+<pre><code># Create a DaemonSet (creates one pod per node)
+kubectl create daemonset log-agent --image=fluentd
+
+# See pods — one per node
+kubectl get pods
+
+# Create another DaemonSet
+kubectl create daemonset monitor --image=prometheus-node-exporter
+
+# See all DaemonSets
+kubectl get daemonsets</code></pre>
+`,
+    example: 'kubectl create daemonset log-agent --image=fluentd',
+    expectedCommands: ['kubectl create daemonset', 'kubectl get daemonsets', 'kubectl get pods'],
+    hint: 'DaemonSets create one pod per node automatically.',
+    challenges: [
+      { id: 'ds-1', task: 'Create a DaemonSet called "log-agent" with the fluentd image', hint: 'kubectl create daemonset log-agent --image=fluentd', answer: 'kubectl create daemonset log-agent --image=fluentd', validate: (c) => c.resources.some(r => r.type === 'daemonset' && r.name === 'log-agent') },
+      { id: 'ds-2', task: 'Create a DaemonSet called "monitor" with the prometheus image', hint: 'kubectl create daemonset monitor --image=prometheus', answer: 'kubectl create daemonset monitor --image=prometheus', validate: (c) => c.resources.some(r => r.type === 'daemonset' && r.name === 'monitor') },
+      { id: 'ds-3', task: 'Delete the "log-agent" DaemonSet', hint: 'kubectl delete daemonset log-agent', answer: 'kubectl delete daemonset log-agent', validate: (c) => !c.resources.some(r => r.type === 'daemonset' && r.name === 'log-agent') },
+    ],
+  },
+  // ── JOBS & CRONJOBS ──
+  {
+    id: 'jobs-cronjobs',
+    title: 'Jobs & CronJobs',
+    category: 'Workloads',
+    content: `
+<h2>Jobs & CronJobs</h2>
+
+<h3>Jobs</h3>
+<p>A <strong>Job</strong> creates one or more Pods and ensures they run to <strong>completion</strong>. Unlike Deployments (which keep pods running forever), Jobs are for batch/one-off tasks.</p>
+
+<h3>Job Types</h3>
+<table>
+  <tr><th>Type</th><th>completions</th><th>parallelism</th><th>Behavior</th></tr>
+  <tr><td>Single</td><td>1</td><td>1</td><td>Run one Pod to completion</td></tr>
+  <tr><td>Fixed count</td><td>N</td><td>1-M</td><td>Run N Pods total, M at a time</td></tr>
+  <tr><td>Work queue</td><td>unset</td><td>N</td><td>Pods coordinate via external queue</td></tr>
+</table>
+
+<h3>CronJobs</h3>
+<p>A <strong>CronJob</strong> creates Jobs on a repeating schedule, using standard cron syntax:</p>
+<pre><code># ┌───── minute (0-59)
+# │ ┌───── hour (0-23)
+# │ │ ┌───── day of month (1-31)
+# │ │ │ ┌───── month (1-12)
+# │ │ │ │ ┌───── day of week (0-6, Sun=0)
+# * * * * *
+# Examples:
+# */5 * * * *    Every 5 minutes
+# 0 2 * * *      Daily at 2 AM
+# 0 0 * * 0      Weekly on Sunday midnight</code></pre>
+
+<h3>Key Properties</h3>
+<ul>
+  <li><strong>backoffLimit:</strong> Number of retries before marking Job as failed (default: 6)</li>
+  <li><strong>activeDeadlineSeconds:</strong> Max time the Job can run</li>
+  <li><strong>ttlSecondsAfterFinished:</strong> Auto-cleanup completed Jobs</li>
+  <li><strong>concurrencyPolicy:</strong> Allow, Forbid, or Replace concurrent CronJob runs</li>
+</ul>
+
+<div class="info-box">
+  <strong>💡 KCNA Tip:</strong> Jobs use <code>restartPolicy: Never</code> or <code>OnFailure</code> (never <code>Always</code>). CronJobs create Jobs on a schedule — they don't run Pods directly.
+</div>
+
+<h3>🧪 Commands to Try</h3>
+<pre><code># Create a Job
+kubectl create job backup --image=busybox
+
+# Create a Job with multiple completions
+kubectl create job batch-process --image=python --completions=5 --parallelism=2
+
+# Create a CronJob
+kubectl create cronjob nightly-backup --image=busybox --schedule="0 2 * * *"
+
+# See Jobs and CronJobs
+kubectl get jobs
+kubectl get cronjobs</code></pre>
+`,
+    example: 'kubectl create job backup --image=busybox',
+    expectedCommands: ['kubectl create job', 'kubectl create cronjob', 'kubectl get jobs'],
+    hint: 'Jobs run to completion. CronJobs create Jobs on a schedule.',
+    challenges: [
+      { id: 'job-1', task: 'Create a Job called "backup" with the busybox image', hint: 'kubectl create job backup --image=busybox', answer: 'kubectl create job backup --image=busybox', validate: (c) => c.resources.some(r => r.type === 'job' && r.name === 'backup') },
+      { id: 'job-2', task: 'Create a Job called "batch" with 3 completions', hint: 'Use --completions=3 flag', answer: 'kubectl create job batch --image=python --completions=3', validate: (c) => { const j = c.resources.find(r => r.type === 'job' && r.name === 'batch'); return j?.metadata.completions === 3; } },
+      { id: 'job-3', task: 'Create a CronJob called "nightly-report" that runs daily at 2 AM', hint: 'Use --schedule="0 2 * * *"', answer: 'kubectl create cronjob nightly-report --image=busybox --schedule="0 2 * * *"', validate: (c) => c.resources.some(r => r.type === 'cronjob' && r.name === 'nightly-report') },
+    ],
+  },
+  // ── PERSISTENT VOLUMES ──
+  {
+    id: 'persistent-volumes',
+    title: 'Persistent Volumes',
+    category: 'Storage',
+    content: `
+<h2>Persistent Volumes & Claims</h2>
+<p>Kubernetes storage abstracts the details of <em>how</em> storage is provided from <em>how</em> it is consumed.</p>
+
+<h3>The Storage Model</h3>
+<table>
+  <tr><th>Resource</th><th>Who Creates It</th><th>Purpose</th></tr>
+  <tr><td><strong>PersistentVolume (PV)</strong></td><td>Admin or dynamic provisioner</td><td>A piece of storage in the cluster</td></tr>
+  <tr><td><strong>PersistentVolumeClaim (PVC)</strong></td><td>Developer/User</td><td>A request for storage</td></tr>
+  <tr><td><strong>StorageClass</strong></td><td>Admin</td><td>Defines how to dynamically provision PVs</td></tr>
+</table>
+
+<h3>PV Lifecycle</h3>
+<ol>
+  <li><strong>Provisioning:</strong> Static (admin creates PV) or Dynamic (StorageClass auto-creates)</li>
+  <li><strong>Binding:</strong> PVC binds to a matching PV (capacity, access mode, storage class)</li>
+  <li><strong>Using:</strong> Pod mounts the PVC as a volume</li>
+  <li><strong>Reclaiming:</strong> When PVC is deleted — Retain, Delete, or Recycle the PV</li>
+</ol>
+
+<h3>Access Modes</h3>
+<table>
+  <tr><th>Mode</th><th>Abbreviation</th><th>Description</th></tr>
+  <tr><td>ReadWriteOnce</td><td>RWO</td><td>Read-write by a single node</td></tr>
+  <tr><td>ReadOnlyMany</td><td>ROX</td><td>Read-only by many nodes</td></tr>
+  <tr><td>ReadWriteMany</td><td>RWX</td><td>Read-write by many nodes</td></tr>
+  <tr><td>ReadWriteOncePod</td><td>RWOP</td><td>Read-write by a single Pod</td></tr>
+</table>
+
+<h3>Reclaim Policies</h3>
+<ul>
+  <li><strong>Retain:</strong> PV is kept after PVC deletion (manual cleanup)</li>
+  <li><strong>Delete:</strong> PV and underlying storage are deleted</li>
+  <li><strong>Recycle:</strong> Basic scrub (rm -rf) — deprecated</li>
+</ul>
+
+<h3>Volume Types</h3>
+<ul>
+  <li><strong>emptyDir:</strong> Temporary, deleted when Pod is removed</li>
+  <li><strong>hostPath:</strong> Mounts a path from the host node</li>
+  <li><strong>configMap / secret:</strong> Mount config data as files</li>
+  <li><strong>CSI:</strong> Container Storage Interface — the standard for storage plugins</li>
+</ul>
+
+<div class="info-box">
+  <strong>💡 KCNA Tip:</strong> PVs are cluster-scoped (not namespaced). PVCs are namespaced. Dynamic provisioning via StorageClasses is the recommended approach. Know the access modes and reclaim policies.
+</div>
+
+<h3>🧪 Commands to Try</h3>
+<pre><code># Create a PersistentVolume
+kubectl create pv my-pv --capacity=10Gi --access-mode=ReadWriteOnce
+
+# Create a PersistentVolumeClaim
+kubectl create pvc my-claim --request=5Gi
+
+# See PVs and PVCs
+kubectl get pv
+kubectl get pvc
+
+# Describe a PV
+kubectl describe pv my-pv</code></pre>
+`,
+    example: 'kubectl create pv my-pv --capacity=10Gi',
+    expectedCommands: ['kubectl create pv', 'kubectl create pvc', 'kubectl get pv'],
+    hint: 'PVs are storage resources. PVCs are requests for that storage.',
+    challenges: [
+      { id: 'pv-1', task: 'Create a PersistentVolume called "data-pv" with 10Gi capacity', hint: 'kubectl create pv data-pv --capacity=10Gi', answer: 'kubectl create pv data-pv --capacity=10Gi', validate: (c) => c.resources.some(r => r.type === 'persistentvolume' && r.name === 'data-pv') },
+      { id: 'pv-2', task: 'Create a PersistentVolumeClaim called "data-claim" requesting 5Gi', hint: 'kubectl create pvc data-claim --request=5Gi', answer: 'kubectl create pvc data-claim --request=5Gi', validate: (c) => c.resources.some(r => r.type === 'persistentvolumeclaim' && r.name === 'data-claim') },
+      { id: 'pv-3', task: 'Create another PV called "logs-pv" with 20Gi capacity', hint: 'kubectl create pv logs-pv --capacity=20Gi', answer: 'kubectl create pv logs-pv --capacity=20Gi', validate: (c) => c.resources.some(r => r.type === 'persistentvolume' && r.name === 'logs-pv') },
+    ],
+  },
+  // ── NETWORK POLICIES ──
+  {
+    id: 'network-policies',
+    title: 'Network Policies',
+    category: 'Networking',
+    content: `
+<h2>Network Policies</h2>
+<p><strong>NetworkPolicies</strong> control traffic flow between Pods at the IP/port level (OSI Layer 3-4). By default, all Pods can communicate with all other Pods — NetworkPolicies restrict this.</p>
+
+<h3>Key Concepts</h3>
+<ul>
+  <li>NetworkPolicies are <strong>additive</strong> — there are no "deny" rules, only "allow"</li>
+  <li>If no NetworkPolicy selects a Pod, all traffic is allowed (default open)</li>
+  <li>Once ANY NetworkPolicy selects a Pod, only explicitly allowed traffic is permitted</li>
+  <li>Requires a <strong>CNI plugin</strong> that supports NetworkPolicy (Calico, Cilium, Weave Net)</li>
+</ul>
+
+<h3>Policy Types</h3>
+<table>
+  <tr><th>Type</th><th>Controls</th></tr>
+  <tr><td><strong>Ingress</strong></td><td>Incoming traffic TO the selected Pods</td></tr>
+  <tr><td><strong>Egress</strong></td><td>Outgoing traffic FROM the selected Pods</td></tr>
+</table>
+
+<h3>Selectors</h3>
+<ul>
+  <li><strong>podSelector:</strong> Select Pods by label in the same namespace</li>
+  <li><strong>namespaceSelector:</strong> Select all Pods in matching namespaces</li>
+  <li><strong>ipBlock:</strong> Select by CIDR range (for external traffic)</li>
+</ul>
+
+<h3>Common Patterns</h3>
+<pre><code># Default deny all ingress traffic
+# (select all pods, allow nothing)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-all-ingress
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+
+# Allow traffic only from frontend to backend
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: frontend</code></pre>
+
+<div class="info-box">
+  <strong>💡 KCNA Tip:</strong> NetworkPolicies require a CNI plugin that supports them. Creating a NetworkPolicy without a supporting CNI has no effect. Calico and Cilium are the most popular choices.
+</div>
+
+<h3>🧪 Commands to Try</h3>
+<pre><code># Create a NetworkPolicy
+kubectl create networkpolicy deny-all --pod-selector=app=web --policy-type=Ingress
+
+# Create another policy
+kubectl create networkpolicy allow-frontend --pod-selector=app=api
+
+# See NetworkPolicies
+kubectl get networkpolicies</code></pre>
+`,
+    example: 'kubectl create networkpolicy deny-all --pod-selector=app=web',
+    expectedCommands: ['kubectl create networkpolicy', 'kubectl get networkpolicies'],
+    hint: 'NetworkPolicies control which Pods can talk to each other.',
+    challenges: [
+      { id: 'np-1', task: 'Create a NetworkPolicy called "deny-all" for pods with app=web', hint: 'kubectl create networkpolicy deny-all --pod-selector=app=web', answer: 'kubectl create networkpolicy deny-all --pod-selector=app=web --policy-type=Ingress', validate: (c) => c.resources.some(r => r.type === 'networkpolicy' && r.name === 'deny-all') },
+      { id: 'np-2', task: 'Create a NetworkPolicy called "allow-api" for the api pods', hint: 'kubectl create networkpolicy allow-api --pod-selector=app=api', answer: 'kubectl create networkpolicy allow-api --pod-selector=app=api', validate: (c) => c.resources.some(r => r.type === 'networkpolicy' && r.name === 'allow-api') },
+    ],
+  },
+  // ── RBAC ──
+  {
+    id: 'rbac',
+    title: 'RBAC & Service Accounts',
+    category: 'Security & RBAC',
+    content: `
+<h2>RBAC (Role-Based Access Control)</h2>
+<p>RBAC controls <strong>who</strong> can do <strong>what</strong> on <strong>which resources</strong> in your cluster.</p>
+
+<h3>The Four RBAC Objects</h3>
+<table>
+  <tr><th>Object</th><th>Scope</th><th>Purpose</th></tr>
+  <tr><td><strong>Role</strong></td><td>Namespace</td><td>Defines permissions within a namespace</td></tr>
+  <tr><td><strong>ClusterRole</strong></td><td>Cluster-wide</td><td>Defines permissions across all namespaces</td></tr>
+  <tr><td><strong>RoleBinding</strong></td><td>Namespace</td><td>Binds a Role/ClusterRole to users in a namespace</td></tr>
+  <tr><td><strong>ClusterRoleBinding</strong></td><td>Cluster-wide</td><td>Binds a ClusterRole to users cluster-wide</td></tr>
+</table>
+
+<h3>Service Accounts</h3>
+<p>A <strong>ServiceAccount</strong> provides an identity for processes running in Pods. Every namespace has a <code>default</code> ServiceAccount.</p>
+<ul>
+  <li>Pods use ServiceAccounts to authenticate to the API server</li>
+  <li>ServiceAccounts are namespaced</li>
+  <li>Tokens are automatically mounted into Pods</li>
+  <li>Follow <strong>least privilege</strong> — don't use the default SA for everything</li>
+</ul>
+
+<h3>RBAC Verbs</h3>
+<p>Common verbs: <code>get</code>, <code>list</code>, <code>watch</code>, <code>create</code>, <code>update</code>, <code>patch</code>, <code>delete</code></p>
+
+<h3>Example: Read-only access to Pods</h3>
+<pre><code>apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-reader
+  namespace: default
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]</code></pre>
+
+<div class="info-box">
+  <strong>💡 KCNA Tip:</strong> RBAC permissions are purely additive — there are no "deny" rules. A RoleBinding can reference a ClusterRole but scope it to a single namespace. ServiceAccounts are the identity mechanism for Pods.
+</div>
+
+<h3>🧪 Commands to Try</h3>
+<pre><code># Create a ServiceAccount
+kubectl create sa app-sa
+
+# Create a Role
+kubectl create role pod-reader --verb=get,list,watch --resource=pods
+
+# Create a RoleBinding
+kubectl create rolebinding read-pods --role=pod-reader --serviceaccount=default:app-sa
+
+# Create a ClusterRole
+kubectl create clusterrole node-viewer --verb=get,list --resource=nodes
+
+# Check permissions
+kubectl auth can-i get pods
+kubectl auth can-i delete nodes</code></pre>
+`,
+    example: 'kubectl create sa app-sa',
+    expectedCommands: ['kubectl create sa', 'kubectl create role', 'kubectl create rolebinding', 'kubectl auth can-i'],
+    hint: 'Create ServiceAccounts, Roles, and RoleBindings to control access.',
+    challenges: [
+      { id: 'rbac-1', task: 'Create a ServiceAccount called "app-sa"', hint: 'kubectl create sa app-sa', answer: 'kubectl create sa app-sa', validate: (c) => c.resources.some(r => r.type === 'serviceaccount' && r.name === 'app-sa') },
+      { id: 'rbac-2', task: 'Create a Role called "pod-reader" with get,list,watch on pods', hint: 'kubectl create role pod-reader --verb=get,list,watch --resource=pods', answer: 'kubectl create role pod-reader --verb=get,list,watch --resource=pods', validate: (c) => c.resources.some(r => r.type === 'role' && r.name === 'pod-reader') },
+      { id: 'rbac-3', task: 'Create a RoleBinding called "read-pods" binding the pod-reader role', hint: 'kubectl create rolebinding read-pods --role=pod-reader --serviceaccount=default:app-sa', answer: 'kubectl create rolebinding read-pods --role=pod-reader --serviceaccount=default:app-sa', validate: (c) => c.resources.some(r => r.type === 'rolebinding' && r.name === 'read-pods') },
+      { id: 'rbac-4', task: 'Create a ClusterRole called "node-viewer" for viewing nodes', hint: 'kubectl create clusterrole node-viewer --verb=get,list --resource=nodes', answer: 'kubectl create clusterrole node-viewer --verb=get,list --resource=nodes', validate: (c) => c.resources.some(r => r.type === 'clusterrole' && r.name === 'node-viewer') },
+    ],
+  },
 ];
 
 export const categories = [...new Set(lessons.map(l => l.category))];
@@ -923,7 +1333,626 @@ export const categories = [...new Set(lessons.map(l => l.category))];
 export function getLessonsByCategory(): Record<string, Lesson[]> {
   const map: Record<string, Lesson[]> = {};
   for (const l of lessons) {
-    if (!map[l.category]) map[l.category] = [];
+    if (!map[l.category]) map[l.category] = [
+  // ── SCHEDULING ──
+  {
+    id: 'scheduling',
+    title: 'Scheduling: Taints, Tolerations & Affinity',
+    category: 'Scheduling',
+    content: `
+<h2>📅 Scheduling: Taints, Tolerations & Node Affinity</h2>
+<p>Kubernetes scheduling determines <strong>which node</strong> a Pod runs on. The scheduler considers resource requests, node selectors, taints/tolerations, and affinity rules.</p>
+
+<h3>Taints & Tolerations</h3>
+<p>A <strong>taint</strong> is applied to a node to repel Pods that don't tolerate it. A <strong>toleration</strong> is applied to a Pod to allow it to schedule onto tainted nodes.</p>
+
+<pre><code># Taint a node (repel pods without matching toleration)
+kubectl taint nodes node1 key=value:NoSchedule
+
+# Remove a taint
+kubectl taint nodes node1 key=value:NoSchedule-
+
+# Taint effects:
+# - NoSchedule: Don't schedule new pods
+# - PreferNoSchedule: Try to avoid, but not guaranteed
+# - NoExecute: Evict existing pods too</code></pre>
+
+<h3>Toleration Example (Pod spec)</h3>
+<pre><code>tolerations:
+- key: "key"
+  operator: "Equal"
+  value: "value"
+  effect: "NoSchedule"</code></pre>
+
+<h3>Node Selectors & Node Affinity</h3>
+<p><strong>nodeSelector</strong> is the simplest way to constrain Pods to nodes with specific labels. <strong>Node Affinity</strong> is more expressive — it supports "preferred" vs "required" and set-based operators.</p>
+
+<pre><code># Label a node
+kubectl label nodes node1 disktype=ssd
+
+# nodeSelector in Pod spec:
+nodeSelector:
+  disktype: ssd
+
+# Node Affinity (more powerful):
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: disktype
+          operator: In
+          values: [ssd]</code></pre>
+
+<h3>Pod Affinity & Anti-Affinity</h3>
+<p><strong>Pod Affinity</strong> schedules Pods near other Pods (e.g., co-locate frontend with cache). <strong>Pod Anti-Affinity</strong> spreads Pods apart (e.g., don't put two replicas on the same node).</p>
+
+<h3>Cordon & Drain</h3>
+<pre><code># Cordon: mark node as unschedulable (existing pods stay)
+kubectl cordon node1
+
+# Uncordon: allow scheduling again
+kubectl uncordon node1
+
+# Drain: cordon + evict all pods (for maintenance)
+kubectl drain node1 --ignore-daemonsets</code></pre>
+
+<div class="info-box">
+  <strong>💡 KCNA Tip:</strong> Taints are on nodes, tolerations are on Pods. The scheduler uses a filtering → scoring pipeline. Resource requests/limits affect scheduling (a Pod won't be placed on a node without enough resources). DaemonSet Pods tolerate taints by default.
+</div>
+
+<h3>🧪 Commands to Try</h3>
+<pre><code># Taint a node
+kubectl taint nodes node1 env=prod:NoSchedule
+
+# Cordon a node
+kubectl cordon node1
+
+# Uncordon it
+kubectl uncordon node1
+
+# Label a node
+kubectl label nodes node1 disktype=ssd</code></pre>
+`,
+    example: 'kubectl taint nodes node1 env=prod:NoSchedule',
+    expectedCommands: ['kubectl taint', 'kubectl cordon', 'kubectl uncordon', 'kubectl label'],
+    hint: 'Use kubectl taint to add taints and kubectl cordon to mark nodes unschedulable.',
+    challenges: [
+      { id: 'sched-1', task: 'Taint node1 with env=prod:NoSchedule', hint: 'kubectl taint nodes node1 env=prod:NoSchedule', answer: 'kubectl taint nodes node1 env=prod:NoSchedule', validate: (c) => c.nodes?.some((n: any) => n.name === 'node1' && n.taints?.some((t: any) => t.key === 'env')) ?? false },
+      { id: 'sched-2', task: 'Cordon node1 to prevent new scheduling', hint: 'kubectl cordon node1', answer: 'kubectl cordon node1', validate: (c) => c.nodes?.some((n: any) => n.name === 'node1' && n.unschedulable) ?? false },
+      { id: 'sched-3', task: 'Uncordon node1 to allow scheduling again', hint: 'kubectl uncordon node1', answer: 'kubectl uncordon node1', validate: (c) => c.nodes?.some((n: any) => n.name === 'node1' && !n.unschedulable) ?? false },
+    ],
+  },
+
+  // ── POD SECURITY & PROBES ──
+  {
+    id: 'pod-security-probes',
+    title: 'Pod Security & Probes',
+    category: 'Security & RBAC',
+    content: `
+<h2>🛡️ Pod Security & Health Probes</h2>
+<p>Kubernetes provides mechanisms to secure Pods and monitor their health through <strong>Security Contexts</strong>, <strong>Pod Security Standards</strong>, and <strong>health probes</strong>.</p>
+
+<h3>Health Probes</h3>
+<p>Probes let the kubelet check if a container is healthy and ready to serve traffic.</p>
+
+<table>
+  <tr><th>Probe</th><th>Purpose</th><th>Failure Action</th></tr>
+  <tr><td><strong>Liveness</strong></td><td>Is the container alive?</td><td>Restart the container</td></tr>
+  <tr><td><strong>Readiness</strong></td><td>Is the container ready for traffic?</td><td>Remove from Service endpoints</td></tr>
+  <tr><td><strong>Startup</strong></td><td>Has the container started?</td><td>Kill and restart (slow-starting apps)</td></tr>
+</table>
+
+<h3>Probe Types</h3>
+<ul>
+  <li><strong>httpGet</strong> — HTTP GET request to a path/port (success = 200-399)</li>
+  <li><strong>tcpSocket</strong> — TCP connection to a port (success = connection established)</li>
+  <li><strong>exec</strong> — Run a command inside the container (success = exit code 0)</li>
+  <li><strong>grpc</strong> — gRPC health check (Kubernetes 1.27+)</li>
+</ul>
+
+<pre><code># Liveness probe example
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: 8080
+  initialDelaySeconds: 15
+  periodSeconds: 10
+  failureThreshold: 3
+
+# Readiness probe example
+readinessProbe:
+  tcpSocket:
+    port: 3306
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+# Startup probe example
+startupProbe:
+  exec:
+    command: ["/bin/sh", "-c", "cat /tmp/ready"]
+  failureThreshold: 30
+  periodSeconds: 10</code></pre>
+
+<h3>Security Context</h3>
+<p>A <strong>SecurityContext</strong> defines privilege and access control settings for a Pod or container.</p>
+
+<pre><code>securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]</code></pre>
+
+<h3>Pod Security Standards (PSS)</h3>
+<p>Kubernetes defines three security profiles enforced at the namespace level:</p>
+<ul>
+  <li><strong>Privileged</strong> — Unrestricted (no restrictions)</li>
+  <li><strong>Baseline</strong> — Minimally restrictive (prevents known privilege escalations)</li>
+  <li><strong>Restricted</strong> — Heavily restricted (current hardening best practices)</li>
+</ul>
+
+<pre><code># Enforce restricted security on a namespace
+kubectl label namespace production \\
+  pod-security.kubernetes.io/enforce=restricted \\
+  pod-security.kubernetes.io/warn=restricted \\
+  pod-security.kubernetes.io/audit=restricted</code></pre>
+
+<div class="info-box">
+  <strong>💡 KCNA Tip:</strong> Pod Security Admission (PSA) replaced PodSecurityPolicy (PSP) in K8s 1.25. Know the three levels: Privileged, Baseline, Restricted. Liveness probes restart containers; readiness probes control Service traffic. Always use <code>runAsNonRoot: true</code> and drop all capabilities in production.
+</div>
+`,
+    example: 'kubectl get pods',
+    expectedCommands: [],
+    hint: 'This is a theory lesson — review the probe types and security contexts above.',
+    challenges: [],
+  },
+
+  // ── HELM ──
+  {
+    id: 'helm',
+    title: 'Helm: The Package Manager',
+    category: 'App Delivery',
+    content: `
+<h2>🚢 Helm: The Kubernetes Package Manager</h2>
+<p>Helm is the most popular <strong>package manager for Kubernetes</strong>. It simplifies deploying complex applications by packaging Kubernetes manifests into reusable <strong>charts</strong>.</p>
+
+<h3>Core Concepts</h3>
+<table>
+  <tr><th>Concept</th><th>Description</th></tr>
+  <tr><td><strong>Chart</strong></td><td>A package of pre-configured Kubernetes resources (like an apt/yum package)</td></tr>
+  <tr><td><strong>Release</strong></td><td>A running instance of a chart in a cluster</td></tr>
+  <tr><td><strong>Repository</strong></td><td>A place to store and share charts (like Docker Hub for images)</td></tr>
+  <tr><td><strong>Values</strong></td><td>Configuration that customizes a chart (values.yaml)</td></tr>
+  <tr><td><strong>Template</strong></td><td>Go-templated Kubernetes manifests inside a chart</td></tr>
+</table>
+
+<h3>Chart Structure</h3>
+<pre><code>mychart/
+├── Chart.yaml          # Chart metadata (name, version, description)
+├── values.yaml         # Default configuration values
+├── charts/             # Dependency charts
+├── templates/          # Go-templated K8s manifests
+│   ├── deployment.yaml
+│   ├── service.yaml
+│   ├── _helpers.tpl    # Template helpers
+│   └── NOTES.txt       # Post-install notes
+└── .helmignore         # Files to ignore when packaging</code></pre>
+
+<h3>Common Helm Commands</h3>
+<pre><code># Add a chart repository
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo update
+
+# Search for charts
+helm search repo nginx
+helm search hub wordpress    # Search Artifact Hub
+
+# Install a chart (creates a release)
+helm install my-release bitnami/nginx
+helm install my-release bitnami/nginx -f custom-values.yaml
+helm install my-release bitnami/nginx --set replicaCount=3
+
+# List releases
+helm list
+helm list --all-namespaces
+
+# Upgrade a release
+helm upgrade my-release bitnami/nginx --set replicaCount=5
+
+# Rollback a release
+helm rollback my-release 1    # Roll back to revision 1
+
+# Uninstall a release
+helm uninstall my-release
+
+# Show chart info
+helm show values bitnami/nginx
+helm show chart bitnami/nginx
+
+# Template rendering (dry-run)
+helm template my-release bitnami/nginx</code></pre>
+
+<h3>Helm 3 vs Helm 2</h3>
+<ul>
+  <li>Helm 3 <strong>removed Tiller</strong> (the server-side component) — more secure</li>
+  <li>Helm 3 uses <strong>3-way strategic merge</strong> for upgrades</li>
+  <li>Release info stored as <strong>Secrets</strong> in the release namespace</li>
+  <li>Charts use <strong>apiVersion: v2</strong> in Chart.yaml</li>
+</ul>
+
+<div class="info-box">
+  <strong>💡 KCNA Tip:</strong> Helm is a CNCF <em>graduated</em> project. Know the difference between Helm 2 (with Tiller) and Helm 3 (no Tiller). A chart is a package, a release is an instance. Helm uses Go templates. <code>helm install</code>, <code>helm upgrade</code>, and <code>helm rollback</code> are the key lifecycle commands.
+</div>
+`,
+    example: 'helm install my-release bitnami/nginx',
+    expectedCommands: [],
+    hint: 'This is a theory lesson — review Helm concepts, chart structure, and commands above.',
+    challenges: [],
+  },
+
+  // ── OBSERVABILITY ──
+  {
+    id: 'observability',
+    title: 'Observability: Metrics, Logs & Traces',
+    category: 'Observability',
+    content: `
+<h2>📊 Observability: Metrics, Logs & Traces</h2>
+<p>Observability is the ability to understand the internal state of a system from its external outputs. In cloud native systems, this is built on <strong>three pillars</strong>: metrics, logs, and traces.</p>
+
+<h3>The Three Pillars</h3>
+<table>
+  <tr><th>Pillar</th><th>What</th><th>Tools</th></tr>
+  <tr><td><strong>Metrics</strong></td><td>Numeric measurements over time (CPU, memory, request rate)</td><td>Prometheus, Datadog, CloudWatch</td></tr>
+  <tr><td><strong>Logs</strong></td><td>Timestamped text records of events</td><td>Fluentd, Fluent Bit, Loki, ELK Stack</td></tr>
+  <tr><td><strong>Traces</strong></td><td>End-to-end request paths across services</td><td>Jaeger, Zipkin, Tempo</td></tr>
+</table>
+
+<h3>Prometheus</h3>
+<p>Prometheus is the de facto standard for Kubernetes metrics. It's a CNCF <em>graduated</em> project.</p>
+<ul>
+  <li><strong>Pull-based model</strong> — Prometheus scrapes /metrics endpoints from targets</li>
+  <li><strong>PromQL</strong> — Powerful query language for metrics</li>
+  <li><strong>Time-series database</strong> — Stores metrics with labels</li>
+  <li><strong>AlertManager</strong> — Handles alerts based on PromQL rules</li>
+  <li><strong>ServiceMonitor</strong> — CRD to configure scrape targets in Kubernetes</li>
+</ul>
+
+<pre><code># Example PromQL queries
+rate(http_requests_total[5m])              # Request rate over 5 min
+histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m]))
+sum by (pod) (container_memory_usage_bytes) # Memory by pod</code></pre>
+
+<h3>Grafana</h3>
+<p>Grafana is the standard visualization layer. It connects to Prometheus (and many other data sources) to create dashboards.</p>
+<ul>
+  <li>Pre-built dashboards for Kubernetes (node-exporter, kube-state-metrics)</li>
+  <li>Alerting rules with notification channels</li>
+  <li>CNCF project (not graduated, but widely adopted)</li>
+</ul>
+
+<h3>Logging Architecture</h3>
+<p>Kubernetes doesn't provide a built-in logging solution. Common patterns:</p>
+<ul>
+  <li><strong>Node-level logging</strong> — DaemonSet runs a log agent (Fluentd/Fluent Bit) on each node</li>
+  <li><strong>Sidecar pattern</strong> — A sidecar container streams logs from the app container</li>
+  <li><strong>Direct push</strong> — App sends logs directly to a logging backend</li>
+</ul>
+
+<pre><code># View pod logs
+kubectl logs my-pod
+kubectl logs my-pod -c sidecar    # Specific container
+kubectl logs my-pod --previous    # Previous crashed container
+kubectl logs -f my-pod            # Follow/stream logs
+kubectl logs -l app=nginx         # Logs by label selector</code></pre>
+
+<h3>OpenTelemetry (OTel)</h3>
+<p>OpenTelemetry is a CNCF project that provides a <strong>unified standard</strong> for collecting metrics, logs, and traces. It's vendor-neutral and merges OpenTracing + OpenCensus.</p>
+<ul>
+  <li><strong>OTel Collector</strong> — Receives, processes, and exports telemetry data</li>
+  <li><strong>SDKs</strong> — Instrument your code in any language</li>
+  <li><strong>OTLP</strong> — OpenTelemetry Protocol for data transport</li>
+  <li>Supports auto-instrumentation for many frameworks</li>
+</ul>
+
+<h3>Kubernetes Built-in Monitoring</h3>
+<pre><code># Resource usage (requires metrics-server)
+kubectl top nodes
+kubectl top pods
+kubectl top pods --containers
+
+# Events (useful for debugging)
+kubectl get events
+kubectl get events --sort-by='.lastTimestamp'</code></pre>
+
+<div class="info-box">
+  <strong>💡 KCNA Tip:</strong> Prometheus and OpenTelemetry are both CNCF projects. Prometheus uses a pull model. The three pillars of observability are metrics, logs, and traces. Fluentd is a CNCF graduated project for log collection. Know that <code>kubectl logs</code> and <code>kubectl top</code> are the built-in observability commands.
+</div>
+`,
+    example: 'kubectl top pods',
+    expectedCommands: [],
+    hint: 'This is a theory lesson — review the three pillars of observability and key tools.',
+    challenges: [],
+  },
+
+  // ── SERVICE MESH ──
+  {
+    id: 'service-mesh',
+    title: 'Service Mesh',
+    category: 'Cloud Native',
+    content: `
+<h2>🕸️ Service Mesh</h2>
+<p>A <strong>service mesh</strong> is a dedicated infrastructure layer for managing service-to-service communication. It handles traffic management, security, and observability without changing application code.</p>
+
+<h3>Why Service Mesh?</h3>
+<p>As microservices grow, managing communication becomes complex. A service mesh provides:</p>
+<ul>
+  <li><strong>Mutual TLS (mTLS)</strong> — Automatic encryption between all services</li>
+  <li><strong>Traffic management</strong> — Canary deployments, A/B testing, traffic splitting</li>
+  <li><strong>Observability</strong> — Distributed tracing, metrics, access logs for free</li>
+  <li><strong>Resilience</strong> — Retries, timeouts, circuit breaking</li>
+  <li><strong>Access control</strong> — Fine-grained authorization policies</li>
+</ul>
+
+<h3>The Sidecar Pattern</h3>
+<p>Most service meshes use the <strong>sidecar proxy pattern</strong>. A proxy container (usually Envoy) is injected alongside every application container in a Pod.</p>
+
+<pre><code>┌─────────────────────────────┐
+│           Pod               │
+│  ┌─────────┐  ┌──────────┐ │
+│  │  App    │──│  Envoy   │ │
+│  │Container│  │  Sidecar │ │
+│  └─────────┘  └──────────┘ │
+└─────────────────────────────┘
+        │              │
+        └──── mTLS ────┘──→ Other Pods</code></pre>
+
+<h3>Istio</h3>
+<p>Istio is the most popular service mesh for Kubernetes.</p>
+<ul>
+  <li><strong>Data plane</strong> — Envoy sidecar proxies handle all network traffic</li>
+  <li><strong>Control plane (istiod)</strong> — Manages configuration, certificates, and service discovery</li>
+  <li><strong>VirtualService</strong> — Define traffic routing rules</li>
+  <li><strong>DestinationRule</strong> — Configure load balancing, connection pools, outlier detection</li>
+  <li><strong>Gateway</strong> — Manage inbound/outbound traffic at the mesh edge</li>
+</ul>
+
+<pre><code># Istio traffic splitting example
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: my-app
+spec:
+  hosts: [my-app]
+  http:
+  - route:
+    - destination:
+        host: my-app
+        subset: v1
+      weight: 90
+    - destination:
+        host: my-app
+        subset: v2
+      weight: 10</code></pre>
+
+<h3>Other Service Meshes</h3>
+<table>
+  <tr><th>Mesh</th><th>Notes</th></tr>
+  <tr><td><strong>Linkerd</strong></td><td>CNCF graduated, lightweight, Rust-based proxy</td></tr>
+  <tr><td><strong>Consul Connect</strong></td><td>HashiCorp, works beyond K8s</td></tr>
+  <tr><td><strong>Cilium Service Mesh</strong></td><td>eBPF-based, no sidecars needed</td></tr>
+</table>
+
+<h3>Envoy Proxy</h3>
+<p>Envoy is a CNCF <em>graduated</em> project and the most common data plane proxy. It provides:</p>
+<ul>
+  <li>L4/L7 load balancing</li>
+  <li>TLS termination</li>
+  <li>HTTP/2 and gRPC support</li>
+  <li>Circuit breaking and retries</li>
+  <li>Rich observability (stats, tracing, logging)</li>
+</ul>
+
+<div class="info-box">
+  <strong>💡 KCNA Tip:</strong> Envoy and Linkerd are CNCF graduated projects. Istio is not a CNCF project (it's under the Istio steering committee). Know the sidecar pattern: a proxy container is injected into each Pod. Service meshes provide mTLS, traffic management, and observability. The data plane (proxies) handles traffic; the control plane manages configuration.
+</div>
+`,
+    example: 'kubectl get pods',
+    expectedCommands: [],
+    hint: 'This is a theory lesson — review service mesh concepts, sidecar pattern, and Istio above.',
+    challenges: [],
+  },
+
+  // ── GITOPS & CI/CD ──
+  {
+    id: 'gitops-cicd',
+    title: 'GitOps & CI/CD',
+    category: 'App Delivery',
+    content: `
+<h2>🚢 GitOps & CI/CD for Kubernetes</h2>
+<p><strong>GitOps</strong> is a set of practices where Git is the single source of truth for declarative infrastructure and applications. Changes are made via pull requests, and an operator automatically syncs the cluster to match the Git state.</p>
+
+<h3>GitOps Principles</h3>
+<ul>
+  <li><strong>Declarative</strong> — The entire system is described declaratively (YAML manifests)</li>
+  <li><strong>Versioned & Immutable</strong> — The desired state is stored in Git</li>
+  <li><strong>Pulled Automatically</strong> — Agents pull the desired state and apply it</li>
+  <li><strong>Continuously Reconciled</strong> — Agents ensure actual state matches desired state</li>
+</ul>
+
+<h3>GitOps Workflow</h3>
+<pre><code>Developer → Git Push → Git Repo
+                          ↓
+                    GitOps Operator (ArgoCD/Flux)
+                          ↓
+                    Kubernetes Cluster
+                          ↓
+                    Reconciliation Loop
+                    (actual == desired?)</code></pre>
+
+<h3>ArgoCD</h3>
+<p>ArgoCD is a CNCF <em>graduated</em> project and the most popular GitOps tool for Kubernetes.</p>
+<ul>
+  <li><strong>Application CRD</strong> — Defines a Git repo + path + target cluster</li>
+  <li><strong>Sync</strong> — Applies manifests from Git to the cluster</li>
+  <li><strong>Health checks</strong> — Monitors resource health status</li>
+  <li><strong>Rollback</strong> — Revert to any previous Git commit</li>
+  <li><strong>Web UI</strong> — Visual dashboard showing app topology and sync status</li>
+  <li><strong>SSO integration</strong> — OIDC, LDAP, SAML for access control</li>
+</ul>
+
+<pre><code># ArgoCD Application example
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: my-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/org/my-app.git
+    targetRevision: main
+    path: k8s/
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: production
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true</code></pre>
+
+<h3>Flux</h3>
+<p>Flux is another CNCF <em>graduated</em> GitOps tool. It's more modular than ArgoCD.</p>
+<ul>
+  <li><strong>GitRepository</strong> — Points to a Git repo</li>
+  <li><strong>Kustomization</strong> — Defines what to apply from the repo</li>
+  <li><strong>HelmRelease</strong> — Manages Helm charts declaratively</li>
+  <li><strong>Image Automation</strong> — Auto-updates image tags in Git</li>
+</ul>
+
+<h3>CI/CD Pipeline for Kubernetes</h3>
+<p>A typical cloud native CI/CD pipeline:</p>
+<ol>
+  <li><strong>Code</strong> → Developer pushes to Git</li>
+  <li><strong>Build</strong> → CI builds container image (GitHub Actions, Jenkins, GitLab CI)</li>
+  <li><strong>Test</strong> → Run unit tests, integration tests, security scans</li>
+  <li><strong>Push</strong> → Push image to container registry (ECR, Docker Hub, GCR)</li>
+  <li><strong>Update</strong> → Update image tag in Git manifests</li>
+  <li><strong>Deploy</strong> → GitOps operator syncs to cluster</li>
+</ol>
+
+<h3>Push vs Pull Deployment</h3>
+<table>
+  <tr><th>Model</th><th>How</th><th>Example</th></tr>
+  <tr><td><strong>Push</strong></td><td>CI pipeline applies to cluster directly</td><td>kubectl apply in Jenkins</td></tr>
+  <tr><td><strong>Pull (GitOps)</strong></td><td>Agent in cluster pulls from Git</td><td>ArgoCD, Flux</td></tr>
+</table>
+<p>GitOps (pull) is preferred because it's more secure (no cluster credentials in CI), auditable, and self-healing.</p>
+
+<div class="info-box">
+  <strong>💡 KCNA Tip:</strong> ArgoCD and Flux are both CNCF graduated projects. GitOps uses Git as the single source of truth with a pull-based reconciliation model. Know the four GitOps principles: declarative, versioned, pulled automatically, continuously reconciled. Push-based deployment (CI applies directly) is less secure than pull-based (GitOps operator in cluster).
+</div>
+`,
+    example: 'kubectl get pods -n argocd',
+    expectedCommands: [],
+    hint: 'This is a theory lesson — review GitOps principles, ArgoCD, and Flux above.',
+    challenges: [],
+  },
+
+  // ── CONTAINER RUNTIMES & OCI ──
+  {
+    id: 'container-runtimes',
+    title: 'Container Runtimes & OCI',
+    category: 'Cloud Native',
+    content: `
+<h2>🐳 Container Runtimes & OCI Standards</h2>
+<p>Kubernetes doesn't run containers directly — it delegates to a <strong>container runtime</strong> via the <strong>Container Runtime Interface (CRI)</strong>.</p>
+
+<h3>Container Runtime Interface (CRI)</h3>
+<p>CRI is a plugin interface that lets the kubelet use different container runtimes without recompilation. Kubernetes removed built-in Docker support (dockershim) in v1.24.</p>
+
+<pre><code>kubelet → CRI → Container Runtime → Containers
+                    │
+                    ├── containerd
+                    ├── CRI-O
+                    └── (others)</code></pre>
+
+<h3>Container Runtimes</h3>
+<table>
+  <tr><th>Runtime</th><th>Description</th><th>Used By</th></tr>
+  <tr><td><strong>containerd</strong></td><td>CNCF graduated, industry standard, extracted from Docker</td><td>EKS, GKE, AKS, Docker Desktop</td></tr>
+  <tr><td><strong>CRI-O</strong></td><td>CNCF graduated, lightweight, built specifically for K8s</td><td>OpenShift, some bare-metal</td></tr>
+  <tr><td><strong>Docker Engine</strong></td><td>Uses containerd under the hood, adds build/CLI tools</td><td>Development environments</td></tr>
+</table>
+
+<h3>Low-Level Runtimes (OCI Runtimes)</h3>
+<p>The high-level runtime (containerd/CRI-O) delegates actual container creation to a low-level OCI runtime:</p>
+<ul>
+  <li><strong>runc</strong> — The reference OCI runtime (default for containerd and CRI-O)</li>
+  <li><strong>crun</strong> — Written in C, faster and lighter than runc</li>
+  <li><strong>gVisor (runsc)</strong> — Google's sandboxed runtime for extra isolation</li>
+  <li><strong>Kata Containers</strong> — Runs containers in lightweight VMs for strong isolation</li>
+</ul>
+
+<pre><code>kubelet → CRI → containerd → runc → Linux namespaces/cgroups
+                                      (actual container)</code></pre>
+
+<h3>OCI Standards</h3>
+<p>The <strong>Open Container Initiative (OCI)</strong> defines industry standards for containers:</p>
+<ul>
+  <li><strong>Image Spec</strong> — How container images are built and structured (layers, manifests, config)</li>
+  <li><strong>Runtime Spec</strong> — How to run a container (filesystem bundle, lifecycle, config.json)</li>
+  <li><strong>Distribution Spec</strong> — How to push/pull images from registries</li>
+</ul>
+
+<h3>Container Images</h3>
+<p>A container image is a layered filesystem with metadata:</p>
+<pre><code># Image layers (each instruction creates a layer)
+FROM ubuntu:22.04          # Base layer
+RUN apt-get update         # Layer 2
+COPY app /app              # Layer 3
+CMD ["/app/start"]         # Metadata (no layer)
+
+# Image naming convention
+registry/repository:tag
+docker.io/library/nginx:1.25
+gcr.io/my-project/my-app:v2.0.0
+
+# Image digest (immutable reference)
+nginx@sha256:abc123...</code></pre>
+
+<h3>Container Registries</h3>
+<table>
+  <tr><th>Registry</th><th>Provider</th></tr>
+  <tr><td>Docker Hub</td><td>Docker Inc.</td></tr>
+  <tr><td>Amazon ECR</td><td>AWS</td></tr>
+  <tr><td>Google Artifact Registry</td><td>GCP</td></tr>
+  <tr><td>Azure Container Registry</td><td>Azure</td></tr>
+  <tr><td>GitHub Container Registry</td><td>GitHub</td></tr>
+  <tr><td>Harbor</td><td>CNCF graduated</td></tr>
+</table>
+
+<h3>Docker vs Kubernetes Relationship</h3>
+<p>A common source of confusion:</p>
+<ul>
+  <li>Docker <strong>builds</strong> images → Kubernetes <strong>runs</strong> them</li>
+  <li>Docker uses containerd internally → Kubernetes uses containerd directly via CRI</li>
+  <li>Kubernetes removed dockershim in 1.24 → Docker images still work (they're OCI-compliant)</li>
+  <li>You don't need Docker installed to run Kubernetes</li>
+</ul>
+
+<div class="info-box">
+  <strong>💡 KCNA Tip:</strong> containerd and CRI-O are both CNCF graduated projects. Kubernetes uses CRI to talk to container runtimes. Docker images work fine in K8s because they follow OCI standards. Know the three OCI specs: Image, Runtime, Distribution. Harbor is a CNCF graduated container registry. Dockershim was removed in K8s 1.24 but Docker-built images are unaffected.
+</div>
+`,
+    example: 'kubectl get nodes',
+    expectedCommands: [],
+    hint: 'This is a theory lesson — review container runtimes, CRI, and OCI standards above.',
+    challenges: [],
+  },
+
+];
     map[l.category].push(l);
   }
   return map;
