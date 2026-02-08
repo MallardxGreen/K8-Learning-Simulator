@@ -27,11 +27,43 @@ const RESOURCE_STYLE: Record<string, { emoji: string; bg: string; border: string
   networkpolicy: { emoji: '🔥', bg: '#7f1d1d', border: '#dc2626', text: '#fca5a5' },
 };
 
-const CARD_W = 136;
-const CARD_H = 46;
-const GAP = 12;
-const NS_PAD = 12;
+const CARD_W = 140;
+const CARD_H = 50;
+const GAP = 16;
+const NS_PAD = 16;
 const COLS = 2;
+
+// Tooltip descriptions for resource types and control plane components
+const RESOURCE_INFO: Record<string, string> = {
+  pod: 'Pod — The smallest deployable unit in K8s. Runs one or more containers sharing network and storage.',
+  deployment: 'Deployment — Manages ReplicaSets and provides declarative updates for Pods. Supports rolling updates and rollbacks.',
+  replicaset: 'ReplicaSet — Ensures a specified number of pod replicas are running at all times.',
+  statefulset: 'StatefulSet — Like a Deployment but for stateful apps. Provides stable network IDs and persistent storage.',
+  daemonset: 'DaemonSet — Ensures a copy of a Pod runs on every (or selected) node. Used for log collectors, monitoring agents.',
+  job: 'Job — Creates Pods that run to completion. Used for batch processing and one-off tasks.',
+  cronjob: 'CronJob — Creates Jobs on a recurring schedule (like cron). Great for periodic tasks.',
+  service: 'Service — Exposes Pods as a network service. Types: ClusterIP, NodePort, LoadBalancer, ExternalName.',
+  configmap: 'ConfigMap — Stores non-sensitive configuration data as key-value pairs. Injected into Pods as env vars or volumes.',
+  secret: 'Secret — Stores sensitive data (passwords, tokens, keys). Base64-encoded, can be encrypted at rest.',
+  ingress: 'Ingress — Manages external HTTP/HTTPS access to Services. Provides routing rules, TLS termination.',
+  persistentvolume: 'PersistentVolume (PV) — A piece of cluster storage provisioned by an admin or dynamically.',
+  persistentvolumeclaim: 'PersistentVolumeClaim (PVC) — A request for storage by a user. Binds to a PV.',
+  serviceaccount: 'ServiceAccount — Provides an identity for processes running in a Pod to interact with the API server.',
+  role: 'Role — Defines permissions (verbs on resources) within a specific namespace.',
+  clusterrole: 'ClusterRole — Like Role but cluster-wide. Can grant access across all namespaces.',
+  rolebinding: 'RoleBinding — Grants a Role to a user or ServiceAccount within a namespace.',
+  clusterrolebinding: 'ClusterRoleBinding — Grants a ClusterRole to a user or ServiceAccount cluster-wide.',
+  networkpolicy: 'NetworkPolicy — Controls traffic flow between Pods. Acts as a firewall for pod-to-pod communication.',
+  namespace: 'Namespace — A virtual cluster within K8s. Used to isolate resources between teams or environments.',
+  node: 'Node — A worker machine (VM or physical) that runs Pods. Managed by the control plane.',
+};
+
+const CP_INFO: Record<string, string> = {
+  'API Server': 'API Server (kube-apiserver) — The front door to K8s. All kubectl commands and internal communication go through here.',
+  'etcd': 'etcd — Distributed key-value store that holds all cluster state and configuration. The single source of truth.',
+  'Scheduler': 'Scheduler (kube-scheduler) — Watches for new Pods with no assigned node and selects the best node to run them on.',
+  'Controller Mgr': 'Controller Manager — Runs controllers (Deployment, ReplicaSet, Node, etc.) that regulate cluster state.',
+};
 
 // Cluster-scoped resource types
 const CLUSTER_SCOPED = new Set(['namespace', 'node', 'persistentvolume', 'clusterrole', 'clusterrolebinding']);
@@ -90,18 +122,18 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
 
   // Layout computation
   const layout = useMemo(() => {
-    const PAD = 20;
-    const CP_W = 500;
-    const CP_H = 70;
-    const NODE_PAD = 14;
-    const NODE_HEADER = 40;
+    const PAD = 28;
+    const CP_W = 520;
+    const CP_H = 76;
+    const NODE_PAD = 18;
+    const NODE_HEADER = 46;
 
     let cursorY = PAD;
 
     // Control Plane
     const cpX = PAD;
     const cpY = cursorY;
-    cursorY += CP_H + 20;
+    cursorY += CP_H + 28;
 
     // Compute each worker node box
     type NsLayout = { name: string; x: number; y: number; w: number; h: number; resources: K8sResource[] };
@@ -120,13 +152,13 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
 
       for (const [nsName, nsRes] of nd.namespaces) {
         const rows = Math.ceil(nsRes.length / COLS) || 1;
-        const nsH = NS_PAD + 20 + rows * (CARD_H + GAP) - GAP + NS_PAD;
+        const nsH = NS_PAD + 24 + rows * (CARD_H + GAP) - GAP + NS_PAD;
         nsBoxes.push({ name: nsName, x: NODE_PAD, y: innerY, w: nsW, h: nsH, resources: nsRes });
         innerY += nsH + GAP;
       }
 
       const nodeW = nsW + NODE_PAD * 2;
-      const nodeH = nd.namespaces.length > 0 ? innerY + NODE_PAD - GAP : NODE_HEADER + 20;
+      const nodeH = nd.namespaces.length > 0 ? innerY + NODE_PAD : NODE_HEADER + 28;
 
       nodeLayouts.push({
         name: nd.node.name,
@@ -202,16 +234,19 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
 
   function renderCard(r: K8sResource, x: number, y: number) {
     const style = RESOURCE_STYLE[r.type] || RESOURCE_STYLE.pod;
-    const label = r.name.length > 13 ? r.name.slice(0, 12) + '…' : r.name;
+    const label = r.name.length > 14 ? r.name.slice(0, 13) + '…' : r.name;
     const status = r.metadata.status as string | undefined;
+    const info = RESOURCE_INFO[r.type] || r.type;
+    const tooltip = `${r.name} (${r.type})${r.namespace ? ` in ns/${r.namespace}` : ''}\n\n${info}`;
     return (
-      <g key={r.id}>
+      <g key={r.id} style={{ cursor: 'pointer' }}>
+        <title>{tooltip}</title>
         <rect x={x} y={y} width={CARD_W} height={CARD_H} rx={7} fill={style.bg} stroke={style.border} strokeWidth={1.5} />
-        <text x={x + 10} y={y + 18} fontSize={13}>{style.emoji}</text>
-        <text x={x + 28} y={y + 18} fill={style.text} fontSize={9.5} fontWeight={600} fontFamily="system-ui">{label}</text>
-        <text x={x + 10} y={y + 34} fill="#64748b" fontSize={7.5} fontFamily="system-ui">{r.type}</text>
+        <text x={x + 10} y={y + 20} fontSize={14}>{style.emoji}</text>
+        <text x={x + 30} y={y + 20} fill={style.text} fontSize={10} fontWeight={600} fontFamily="system-ui">{label}</text>
+        <text x={x + 10} y={y + 36} fill="#64748b" fontSize={8} fontFamily="system-ui">{r.type}</text>
         {status && (
-          <text x={x + CARD_W - 8} y={y + 34} fill={status === 'Running' ? '#10b981' : status.includes('Disabled') ? '#ef4444' : '#f59e0b'} fontSize={7.5} textAnchor="end" fontFamily="system-ui">● {status}</text>
+          <text x={x + CARD_W - 8} y={y + 36} fill={status === 'Running' ? '#10b981' : status.includes('Disabled') ? '#ef4444' : '#f59e0b'} fontSize={8} textAnchor="end" fontFamily="system-ui">● {status}</text>
         )}
       </g>
     );
@@ -251,14 +286,18 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
 
             {/* Control Plane */}
             <rect x={layout.cpX} y={layout.cpY} width={layout.CP_W} height={layout.CP_H} rx={10} fill="#0f172a" stroke="#6366f1" strokeWidth={1.5} />
-            <text x={layout.cpX + 12} y={layout.cpY + 18} fill="#a78bfa" fontSize={10} fontWeight={700} fontFamily="system-ui">🧠 Control Plane (Master)</text>
+            <g style={{ cursor: 'pointer' }}>
+              <title>Control Plane (Master Node) — The brain of the cluster. Manages scheduling, state, and API access. Runs: API Server, etcd, Scheduler, Controller Manager.</title>
+              <text x={layout.cpX + 14} y={layout.cpY + 20} fill="#a78bfa" fontSize={10} fontWeight={700} fontFamily="system-ui">🧠 Control Plane (Master)</text>
+            </g>
             {['API Server', 'etcd', 'Scheduler', 'Controller Mgr'].map((comp, i) => {
-              const cx = layout.cpX + 12 + i * 120;
-              const cy = layout.cpY + 30;
+              const cx = layout.cpX + 14 + i * 124;
+              const cy = layout.cpY + 32;
               return (
-                <g key={comp}>
-                  <rect x={cx} y={cy} width={110} height={26} rx={6} fill="#1e1b4b" stroke="#4f46e5" strokeWidth={1} />
-                  <text x={cx + 55} y={cy + 17} fill="#818cf8" fontSize={9} fontFamily="system-ui" textAnchor="middle">{comp}</text>
+                <g key={comp} style={{ cursor: 'pointer' }}>
+                  <title>{CP_INFO[comp]}</title>
+                  <rect x={cx} y={cy} width={114} height={28} rx={6} fill="#1e1b4b" stroke="#4f46e5" strokeWidth={1} />
+                  <text x={cx + 57} y={cy + 18} fill="#818cf8" fontSize={9} fontFamily="system-ui" textAnchor="middle">{comp}</text>
                 </g>
               );
             })}
@@ -267,10 +306,13 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
             {layout.nodeLayouts.map(n => (
               <g key={n.name}>
                 <rect x={n.x} y={n.y} width={n.w} height={n.h} rx={10} fill="#0c1222" stroke={n.status.includes('Disabled') ? '#ef4444' : '#0ea5e9'} strokeWidth={1.5} />
-                <text x={n.x + 12} y={n.y + 18} fill={n.status.includes('Disabled') ? '#fca5a5' : '#7dd3fc'} fontSize={10} fontWeight={700} fontFamily="system-ui">
-                  🖥️ {n.name} (Worker)
-                </text>
-                <text x={n.x + n.w - 12} y={n.y + 18} fill={n.status === 'Ready' ? '#10b981' : '#ef4444'} fontSize={8} textAnchor="end" fontFamily="system-ui">● {n.status}</text>
+                <g style={{ cursor: 'pointer' }}>
+                  <title>{`${n.name} — Worker Node\nStatus: ${n.status}${n.taints.length > 0 ? '\nTaints: ' + n.taints.join(', ') : ''}\n\n${RESOURCE_INFO.node}`}</title>
+                  <text x={n.x + 14} y={n.y + 20} fill={n.status.includes('Disabled') ? '#fca5a5' : '#7dd3fc'} fontSize={10} fontWeight={700} fontFamily="system-ui">
+                    🖥️ {n.name} (Worker)
+                  </text>
+                  <text x={n.x + n.w - 14} y={n.y + 20} fill={n.status === 'Ready' ? '#10b981' : '#ef4444'} fontSize={8} textAnchor="end" fontFamily="system-ui">● {n.status}</text>
+                </g>
                 {n.taints.length > 0 && (
                   <text x={n.x + 12} y={n.y + 32} fill="#f59e0b" fontSize={7.5} fontFamily="system-ui">⚠️ Taints: {n.taints.join(', ')}</text>
                 )}
@@ -279,7 +321,10 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
                 {n.nsBoxes.map(ns => (
                   <g key={ns.name}>
                     <rect x={n.x + ns.x} y={n.y + ns.y} width={ns.w} height={ns.h} rx={8} fill="rgba(99,102,241,0.05)" stroke="#6366f1" strokeWidth={1} strokeDasharray="4 2" />
-                    <text x={n.x + ns.x + NS_PAD} y={n.y + ns.y + 14} fill="#a78bfa" fontSize={9} fontWeight={600} fontFamily="system-ui">📁 ns/{ns.name}</text>
+                    <g style={{ cursor: 'pointer' }}>
+                      <title>{`Namespace: ${ns.name}\n${ns.resources.length} resource${ns.resources.length !== 1 ? 's' : ''}\n\n${RESOURCE_INFO.namespace}`}</title>
+                      <text x={n.x + ns.x + NS_PAD} y={n.y + ns.y + 16} fill="#a78bfa" fontSize={9} fontWeight={600} fontFamily="system-ui">📁 ns/{ns.name}</text>
+                    </g>
                     {ns.resources.map((r, i) => {
                       const col = i % COLS;
                       const row = Math.floor(i / COLS);
