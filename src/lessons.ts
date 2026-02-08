@@ -1937,6 +1937,376 @@ kubectl scale deployment/worker --replicas=1</code></pre>
       { id: 'lab5-3', task: 'Scale everything back down: frontend=2, api=1, worker=1', hint: 'Three more scale commands with lower numbers', answer: 'kubectl scale deployment/frontend --replicas=2\nkubectl scale deployment/api --replicas=1\nkubectl scale deployment/worker --replicas=1', validate: (c) => { const f = c.resources.find(r => r.type === 'deployment' && r.name === 'frontend'); const a = c.resources.find(r => r.type === 'deployment' && r.name === 'api'); const w = c.resources.find(r => r.type === 'deployment' && r.name === 'worker'); return f?.metadata.replicas === 2 && a?.metadata.replicas === 1 && w?.metadata.replicas === 1; } },
     ],
   },
+
+// ── INTERVIEW LAB 6: RBAC Security Setup ──
+  {
+    id: 'lab-rbac-security',
+    title: 'Lab: RBAC Security Setup',
+    category: 'Interview Labs',
+    content: `
+<h2>🎯 Lab: RBAC Security Setup</h2>
+<p><strong>Interview Scenario:</strong> "Your team needs to give a new developer read-only access to pods in the production namespace, but they should NOT be able to delete or modify anything. Set up the RBAC resources to make this happen."</p>
+
+<div class="info-box">
+  <strong>💡 Why this matters:</strong> RBAC is one of the most asked Kubernetes interview topics. Interviewers want to see that you understand ServiceAccounts, Roles, and RoleBindings — and can set them up from scratch.
+</div>
+
+<h3>Your Tasks</h3>
+<ol>
+  <li>Create a namespace called "production"</li>
+  <li>Create a ServiceAccount called "dev-user" for the developer</li>
+  <li>Create a Role called "pod-reader" that allows get, list, watch on pods</li>
+  <li>Create a RoleBinding called "dev-read-pods" that binds the role to the ServiceAccount</li>
+  <li>Verify the setup with kubectl auth can-i</li>
+</ol>
+
+<h3>Commands You'll Need</h3>
+<pre><code>kubectl create namespace production
+kubectl create sa dev-user
+kubectl create role pod-reader --verb=get,list,watch --resource=pods
+kubectl create rolebinding dev-read-pods --role=pod-reader --serviceaccount=default:dev-user
+kubectl auth can-i get pods</code></pre>
+`,
+    example: 'kubectl create sa dev-user',
+    expectedCommands: ['kubectl create namespace', 'kubectl create sa', 'kubectl create role', 'kubectl create rolebinding'],
+    hint: 'Start by creating the namespace and ServiceAccount, then the Role and RoleBinding.',
+    challenges: [
+      { id: 'lab6-1', task: 'Create a namespace called "production"', hint: 'kubectl create namespace production', answer: 'kubectl create namespace production', validate: (c) => c.resources.some(r => r.type === 'namespace' && r.name === 'production') },
+      { id: 'lab6-2', task: 'Create a ServiceAccount called "dev-user"', hint: 'kubectl create sa dev-user', answer: 'kubectl create sa dev-user', validate: (c) => c.resources.some(r => r.type === 'serviceaccount' && r.name === 'dev-user') },
+      { id: 'lab6-3', task: 'Create a Role called "pod-reader" with get,list,watch on pods', hint: 'kubectl create role pod-reader --verb=get,list,watch --resource=pods', answer: 'kubectl create role pod-reader --verb=get,list,watch --resource=pods', validate: (c) => c.resources.some(r => r.type === 'role' && r.name === 'pod-reader') },
+      { id: 'lab6-4', task: 'Create a RoleBinding "dev-read-pods" binding pod-reader to dev-user', hint: 'kubectl create rolebinding dev-read-pods --role=pod-reader --serviceaccount=default:dev-user', answer: 'kubectl create rolebinding dev-read-pods --role=pod-reader --serviceaccount=default:dev-user', validate: (c) => c.resources.some(r => r.type === 'rolebinding' && r.name === 'dev-read-pods') },
+    ],
+  },
+
+  // ── INTERVIEW LAB 7: StatefulSet with Storage ──
+  {
+    id: 'lab-statefulset-storage',
+    title: 'Lab: StatefulSet with Persistent Storage',
+    category: 'Interview Labs',
+    content: `
+<h2>🎯 Lab: StatefulSet with Persistent Storage</h2>
+<p><strong>Interview Scenario:</strong> "You need to deploy a database (like PostgreSQL or MongoDB) that requires stable network identities and persistent storage. How would you set this up in Kubernetes?"</p>
+
+<div class="info-box">
+  <strong>💡 Why this matters:</strong> Interviewers love asking about StatefulSets vs Deployments. This tests whether you understand when to use each, and how persistent storage works with stateful workloads.
+</div>
+
+<h3>Your Tasks</h3>
+<ol>
+  <li>Create a PersistentVolume called "db-pv" with 10Gi capacity</li>
+  <li>Create a PersistentVolumeClaim called "db-pvc" requesting 5Gi</li>
+  <li>Create a StatefulSet called "postgres" with 3 replicas</li>
+  <li>Create a headless Service called "postgres-headless" for the StatefulSet</li>
+</ol>
+
+<h3>Key Concepts</h3>
+<ul>
+  <li><strong>StatefulSet</strong> — Pods get stable names (postgres-0, postgres-1, postgres-2)</li>
+  <li><strong>Headless Service</strong> — Each pod gets its own DNS entry</li>
+  <li><strong>PV/PVC</strong> — Storage persists even if pods restart</li>
+</ul>
+
+<h3>Commands You'll Need</h3>
+<pre><code>kubectl create pv db-pv --capacity=10Gi
+kubectl create pvc db-pvc --request=5Gi
+kubectl create statefulset postgres --image=postgres --replicas=3
+kubectl create service postgres-headless --port=5432 --type=ClusterIP</code></pre>
+`,
+    example: 'kubectl create pv db-pv --capacity=10Gi',
+    expectedCommands: ['kubectl create pv', 'kubectl create pvc', 'kubectl create statefulset', 'kubectl create service'],
+    hint: 'Create the storage first (PV, PVC), then the StatefulSet, then the headless Service.',
+    challenges: [
+      { id: 'lab7-1', task: 'Create a PersistentVolume called "db-pv" with 10Gi', hint: 'kubectl create pv db-pv --capacity=10Gi', answer: 'kubectl create pv db-pv --capacity=10Gi', validate: (c) => c.resources.some(r => r.type === 'persistentvolume' && r.name === 'db-pv') },
+      { id: 'lab7-2', task: 'Create a PersistentVolumeClaim called "db-pvc" requesting 5Gi', hint: 'kubectl create pvc db-pvc --request=5Gi', answer: 'kubectl create pvc db-pvc --request=5Gi', validate: (c) => c.resources.some(r => r.type === 'persistentvolumeclaim' && r.name === 'db-pvc') },
+      { id: 'lab7-3', task: 'Create a StatefulSet called "postgres" with 3 replicas', hint: 'kubectl create statefulset postgres --image=postgres --replicas=3', answer: 'kubectl create statefulset postgres --image=postgres --replicas=3', validate: (c) => c.resources.some(r => r.type === 'statefulset' && r.name === 'postgres' && r.metadata.replicas === 3) },
+      { id: 'lab7-4', task: 'Create a headless Service called "postgres-headless"', hint: 'kubectl create service postgres-headless --port=5432', answer: 'kubectl create service postgres-headless --port=5432 --type=ClusterIP', validate: (c) => c.resources.some(r => r.type === 'service' && r.name === 'postgres-headless') },
+    ],
+  },
+
+  // ── INTERVIEW LAB 8: Network Policy Lockdown ──
+  {
+    id: 'lab-network-lockdown',
+    title: 'Lab: Network Policy Lockdown',
+    category: 'Interview Labs',
+    content: `
+<h2>🎯 Lab: Network Policy Lockdown</h2>
+<p><strong>Interview Scenario:</strong> "Your security team requires that the database pods should only accept traffic from the API pods, and nothing else. How would you implement this?"</p>
+
+<div class="info-box">
+  <strong>💡 Why this matters:</strong> Network security is a top interview topic. Interviewers want to see that you can restrict pod-to-pod communication using NetworkPolicies — a critical skill for production environments.
+</div>
+
+<h3>Your Tasks</h3>
+<ol>
+  <li>Create an "api" pod and a "database" pod</li>
+  <li>Create a NetworkPolicy called "db-allow-api-only" that restricts access to the database</li>
+  <li>Create a second NetworkPolicy called "deny-external" for broader lockdown</li>
+</ol>
+
+<h3>Commands You'll Need</h3>
+<pre><code>kubectl run api --image=node
+kubectl run database --image=postgres
+kubectl create networkpolicy db-allow-api-only --pod-selector=app=database
+kubectl create networkpolicy deny-external --pod-selector=app=api</code></pre>
+`,
+    example: 'kubectl run api --image=node',
+    expectedCommands: ['kubectl run', 'kubectl create networkpolicy'],
+    hint: 'Create the pods first, then apply NetworkPolicies to restrict traffic.',
+    challenges: [
+      { id: 'lab8-1', task: 'Create a pod called "api" with the node image', hint: 'kubectl run api --image=node', answer: 'kubectl run api --image=node', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'api') },
+      { id: 'lab8-2', task: 'Create a pod called "database" with the postgres image', hint: 'kubectl run database --image=postgres', answer: 'kubectl run database --image=postgres', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'database') },
+      { id: 'lab8-3', task: 'Create a NetworkPolicy "db-allow-api-only" for database pods', hint: 'kubectl create networkpolicy db-allow-api-only --pod-selector=app=database', answer: 'kubectl create networkpolicy db-allow-api-only --pod-selector=app=database', validate: (c) => c.resources.some(r => r.type === 'networkpolicy' && r.name === 'db-allow-api-only') },
+      { id: 'lab8-4', task: 'Create a NetworkPolicy "deny-external" for api pods', hint: 'kubectl create networkpolicy deny-external --pod-selector=app=api', answer: 'kubectl create networkpolicy deny-external --pod-selector=app=api', validate: (c) => c.resources.some(r => r.type === 'networkpolicy' && r.name === 'deny-external') },
+    ],
+  },
+
+  // ── INTERVIEW LAB 9: CronJob Batch Processing ──
+  {
+    id: 'lab-cronjob-batch',
+    title: 'Lab: CronJob Batch Processing',
+    category: 'Interview Labs',
+    content: `
+<h2>🎯 Lab: CronJob Batch Processing</h2>
+<p><strong>Interview Scenario:</strong> "You need to set up a nightly data cleanup job that runs every day, plus a one-time data migration job that processes 5 items in parallel. How would you configure this?"</p>
+
+<div class="info-box">
+  <strong>💡 Why this matters:</strong> Jobs and CronJobs come up frequently in interviews. They test whether you understand batch workloads vs long-running services — a key distinction in Kubernetes.
+</div>
+
+<h3>Your Tasks</h3>
+<ol>
+  <li>Create a one-time Job called "data-migration" with 5 completions and parallelism of 3</li>
+  <li>Create a CronJob called "nightly-cleanup" that runs on a schedule</li>
+  <li>Create another Job called "db-backup" for a database backup</li>
+</ol>
+
+<h3>Commands You'll Need</h3>
+<pre><code>kubectl create job data-migration --image=busybox --completions=5 --parallelism=3
+kubectl create cronjob nightly-cleanup --image=busybox --schedule="0 2 * * *"
+kubectl create job db-backup --image=postgres</code></pre>
+`,
+    example: 'kubectl create job data-migration --image=busybox --completions=5 --parallelism=3',
+    expectedCommands: ['kubectl create job', 'kubectl create cronjob'],
+    hint: 'Use kubectl create job for one-time tasks and kubectl create cronjob for scheduled tasks.',
+    challenges: [
+      { id: 'lab9-1', task: 'Create a Job "data-migration" with 5 completions and parallelism of 3', hint: 'kubectl create job data-migration --image=busybox --completions=5 --parallelism=3', answer: 'kubectl create job data-migration --image=busybox --completions=5 --parallelism=3', validate: (c) => c.resources.some(r => r.type === 'job' && r.name === 'data-migration' && r.metadata.completions === 5) },
+      { id: 'lab9-2', task: 'Create a CronJob "nightly-cleanup" with a schedule', hint: 'kubectl create cronjob nightly-cleanup --image=busybox --schedule="0 2 * * *"', answer: 'kubectl create cronjob nightly-cleanup --image=busybox --schedule="0 2 * * *"', validate: (c) => c.resources.some(r => r.type === 'cronjob' && r.name === 'nightly-cleanup') },
+      { id: 'lab9-3', task: 'Create a Job "db-backup" for database backup', hint: 'kubectl create job db-backup --image=postgres', answer: 'kubectl create job db-backup --image=postgres', validate: (c) => c.resources.some(r => r.type === 'job' && r.name === 'db-backup') },
+    ],
+  },
+
+  // ── INTERVIEW LAB 10: DaemonSet Monitoring Agent ──
+  {
+    id: 'lab-daemonset-monitoring',
+    title: 'Lab: DaemonSet Monitoring Agent',
+    category: 'Interview Labs',
+    content: `
+<h2>🎯 Lab: DaemonSet Monitoring Agent</h2>
+<p><strong>Interview Scenario:</strong> "You need to deploy a log collector and a metrics agent on every node in the cluster. How would you ensure one copy runs on each node, even as new nodes are added?"</p>
+
+<div class="info-box">
+  <strong>💡 Why this matters:</strong> DaemonSets are a classic interview topic. Interviewers want to know when you'd use a DaemonSet vs a Deployment, and common use cases like monitoring, logging, and networking agents.
+</div>
+
+<h3>Your Tasks</h3>
+<ol>
+  <li>Create a DaemonSet called "log-collector" using fluentd</li>
+  <li>Create a DaemonSet called "metrics-agent" using prometheus-node-exporter</li>
+  <li>Create a ConfigMap called "log-config" for the log collector configuration</li>
+  <li>Verify both DaemonSets are running with kubectl get daemonsets</li>
+</ol>
+
+<h3>Commands You'll Need</h3>
+<pre><code>kubectl create daemonset log-collector --image=fluentd
+kubectl create daemonset metrics-agent --image=prom/node-exporter
+kubectl create configmap log-config
+kubectl get daemonsets</code></pre>
+`,
+    example: 'kubectl create daemonset log-collector --image=fluentd',
+    expectedCommands: ['kubectl create daemonset', 'kubectl create configmap', 'kubectl get daemonsets'],
+    hint: 'DaemonSets automatically run one pod per node. Create them like deployments but with type daemonset.',
+    challenges: [
+      { id: 'lab10-1', task: 'Create a DaemonSet "log-collector" with fluentd image', hint: 'kubectl create daemonset log-collector --image=fluentd', answer: 'kubectl create daemonset log-collector --image=fluentd', validate: (c) => c.resources.some(r => r.type === 'daemonset' && r.name === 'log-collector') },
+      { id: 'lab10-2', task: 'Create a DaemonSet "metrics-agent" with prom/node-exporter', hint: 'kubectl create daemonset metrics-agent --image=prom/node-exporter', answer: 'kubectl create daemonset metrics-agent --image=prom/node-exporter', validate: (c) => c.resources.some(r => r.type === 'daemonset' && r.name === 'metrics-agent') },
+      { id: 'lab10-3', task: 'Create a ConfigMap "log-config" for configuration', hint: 'kubectl create configmap log-config', answer: 'kubectl create configmap log-config', validate: (c) => c.resources.some(r => r.type === 'configmap' && r.name === 'log-config') },
+    ],
+  },
+
+  // ── INTERVIEW LAB 11: Blue-Green Deployment ──
+  {
+    id: 'lab-blue-green',
+    title: 'Lab: Blue-Green Deployment',
+    category: 'Interview Labs',
+    content: `
+<h2>🎯 Lab: Blue-Green Deployment</h2>
+<p><strong>Interview Scenario:</strong> "Explain and demonstrate a blue-green deployment strategy. You have a v1 of your app running and need to deploy v2 with zero downtime, with the ability to instantly roll back."</p>
+
+<div class="info-box">
+  <strong>💡 Why this matters:</strong> Deployment strategies (blue-green, canary, rolling) are among the most common interview questions. This lab tests your understanding of how to use labels and Services to switch traffic between versions.
+</div>
+
+<h3>Your Tasks</h3>
+<ol>
+  <li>Create the "blue" deployment (v1) with 3 replicas</li>
+  <li>Expose it with a Service</li>
+  <li>Create the "green" deployment (v2) with 3 replicas</li>
+  <li>Label the green deployment to take over traffic</li>
+</ol>
+
+<h3>Strategy Explained</h3>
+<pre><code># Blue-Green: Two identical environments
+# Blue (v1) ← Service points here (live traffic)
+# Green (v2) ← Deploy and test here
+
+# When ready, switch the Service selector:
+# Blue (v1)
+# Green (v2) ← Service now points here
+
+# Rollback? Just switch the selector back!</code></pre>
+
+<h3>Commands You'll Need</h3>
+<pre><code>kubectl create deployment app-blue --image=nginx:1.24 --replicas=3
+kubectl expose deployment app-blue --port=80 --type=ClusterIP
+kubectl create deployment app-green --image=nginx:1.25 --replicas=3
+kubectl label deployment app-green version=v2</code></pre>
+`,
+    example: 'kubectl create deployment app-blue --image=nginx:1.24 --replicas=3',
+    expectedCommands: ['kubectl create deployment', 'kubectl expose', 'kubectl label'],
+    hint: 'Create both deployments, expose the blue one, then label the green one for the switchover.',
+    challenges: [
+      { id: 'lab11-1', task: 'Create deployment "app-blue" with nginx:1.24 and 3 replicas', hint: 'kubectl create deployment app-blue --image=nginx:1.24 --replicas=3', answer: 'kubectl create deployment app-blue --image=nginx:1.24 --replicas=3', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'app-blue' && r.metadata.replicas === 3) },
+      { id: 'lab11-2', task: 'Expose app-blue as a ClusterIP Service on port 80', hint: 'kubectl expose deployment app-blue --port=80 --type=ClusterIP', answer: 'kubectl expose deployment app-blue --port=80 --type=ClusterIP', validate: (c) => c.resources.some(r => r.type === 'service' && r.name === 'app-blue') },
+      { id: 'lab11-3', task: 'Create deployment "app-green" with nginx:1.25 and 3 replicas', hint: 'kubectl create deployment app-green --image=nginx:1.25 --replicas=3', answer: 'kubectl create deployment app-green --image=nginx:1.25 --replicas=3', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'app-green' && r.metadata.replicas === 3) },
+      { id: 'lab11-4', task: 'Label the green deployment with version=v2', hint: 'kubectl label deployment app-green version=v2', answer: 'kubectl label deployment app-green version=v2', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'app-green' && r.labels.version === 'v2') },
+    ],
+  },
+
+  // ── INTERVIEW LAB 12: Microservices Architecture ──
+  {
+    id: 'lab-microservices',
+    title: 'Lab: Microservices Architecture',
+    category: 'Interview Labs',
+    content: `
+<h2>🎯 Lab: Microservices Architecture</h2>
+<p><strong>Interview Scenario:</strong> "Design and deploy a 3-tier microservices application with a frontend, backend API, and database. Each tier should be independently scalable and have its own Service for discovery."</p>
+
+<div class="info-box">
+  <strong>💡 Why this matters:</strong> This is the classic "design a system on Kubernetes" interview question. It tests your ability to think about service discovery, scaling tiers independently, and organizing resources.
+</div>
+
+<h3>Your Tasks</h3>
+<ol>
+  <li>Create a namespace "microservices" for isolation</li>
+  <li>Deploy the database tier (StatefulSet + Service)</li>
+  <li>Deploy the API tier (Deployment + Service)</li>
+  <li>Deploy the frontend tier (Deployment + Service with LoadBalancer)</li>
+  <li>Scale the API to handle more traffic</li>
+</ol>
+
+<h3>Commands You'll Need</h3>
+<pre><code>kubectl create namespace microservices
+kubectl create statefulset db --image=postgres --replicas=1 -n microservices
+kubectl create service db-svc --port=5432 -n microservices
+kubectl create deployment api --image=node --replicas=2 -n microservices
+kubectl expose deployment api --port=3000 -n microservices
+kubectl create deployment frontend --image=nginx --replicas=3 -n microservices
+kubectl expose deployment frontend --port=80 --type=LoadBalancer -n microservices
+kubectl scale deployment/api --replicas=5 -n microservices</code></pre>
+`,
+    example: 'kubectl create namespace microservices',
+    expectedCommands: ['kubectl create namespace', 'kubectl create statefulset', 'kubectl create deployment', 'kubectl expose', 'kubectl scale'],
+    hint: 'Build from the bottom up: namespace → database → API → frontend → scale.',
+    challenges: [
+      { id: 'lab12-1', task: 'Create namespace "microservices"', hint: 'kubectl create namespace microservices', answer: 'kubectl create namespace microservices', validate: (c) => c.resources.some(r => r.type === 'namespace' && r.name === 'microservices') },
+      { id: 'lab12-2', task: 'Create StatefulSet "db" with postgres in the microservices namespace', hint: 'kubectl create statefulset db --image=postgres -n microservices', answer: 'kubectl create statefulset db --image=postgres --replicas=1 -n microservices', validate: (c) => c.resources.some(r => r.type === 'statefulset' && r.name === 'db') },
+      { id: 'lab12-3', task: 'Create Deployment "api" with 2 replicas in microservices namespace', hint: 'kubectl create deployment api --image=node --replicas=2 -n microservices', answer: 'kubectl create deployment api --image=node --replicas=2 -n microservices', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'api') },
+      { id: 'lab12-4', task: 'Expose the API deployment on port 3000', hint: 'kubectl expose deployment api --port=3000 -n microservices', answer: 'kubectl expose deployment api --port=3000 -n microservices', validate: (c) => c.resources.some(r => r.type === 'service' && r.name === 'api') },
+      { id: 'lab12-5', task: 'Create Deployment "frontend" with 3 replicas and expose as LoadBalancer', hint: 'kubectl create deployment frontend --image=nginx --replicas=3 -n microservices', answer: 'kubectl create deployment frontend --image=nginx --replicas=3 -n microservices', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'frontend' && r.metadata.replicas === 3) },
+      { id: 'lab12-6', task: 'Scale the API to 5 replicas', hint: 'kubectl scale deployment/api --replicas=5 -n microservices', answer: 'kubectl scale deployment/api --replicas=5 -n microservices', validate: (c) => { const api = c.resources.find(r => r.type === 'deployment' && r.name === 'api'); return api?.metadata.replicas === 5; } },
+    ],
+  },
+
+  // ── INTERVIEW LAB 13: Config & Secrets Management ──
+  {
+    id: 'lab-config-secrets',
+    title: 'Lab: Config & Secrets Management',
+    category: 'Interview Labs',
+    content: `
+<h2>🎯 Lab: Config & Secrets Management</h2>
+<p><strong>Interview Scenario:</strong> "Your application needs database credentials and feature flags. How do you manage configuration and sensitive data in Kubernetes without hardcoding them in your container images?"</p>
+
+<div class="info-box">
+  <strong>💡 Why this matters:</strong> ConfigMaps and Secrets are fundamental to 12-factor app design on Kubernetes. Interviewers want to see that you separate config from code and handle secrets securely.
+</div>
+
+<h3>Your Tasks</h3>
+<ol>
+  <li>Create a ConfigMap "app-config" for application settings</li>
+  <li>Create a Secret "db-credentials" for database credentials</li>
+  <li>Create a ConfigMap "feature-flags" for feature toggles</li>
+  <li>Deploy the application that uses these configs</li>
+  <li>Create a Secret "tls-cert" for TLS certificates</li>
+</ol>
+
+<h3>Commands You'll Need</h3>
+<pre><code>kubectl create configmap app-config
+kubectl create secret db-credentials
+kubectl create configmap feature-flags
+kubectl create deployment webapp --image=nginx
+kubectl create secret tls-cert</code></pre>
+`,
+    example: 'kubectl create configmap app-config',
+    expectedCommands: ['kubectl create configmap', 'kubectl create secret', 'kubectl create deployment'],
+    hint: 'Create ConfigMaps for non-sensitive data and Secrets for credentials.',
+    challenges: [
+      { id: 'lab13-1', task: 'Create a ConfigMap called "app-config"', hint: 'kubectl create configmap app-config', answer: 'kubectl create configmap app-config', validate: (c) => c.resources.some(r => r.type === 'configmap' && r.name === 'app-config') },
+      { id: 'lab13-2', task: 'Create a Secret called "db-credentials"', hint: 'kubectl create secret db-credentials', answer: 'kubectl create secret db-credentials', validate: (c) => c.resources.some(r => r.type === 'secret' && r.name === 'db-credentials') },
+      { id: 'lab13-3', task: 'Create a ConfigMap called "feature-flags"', hint: 'kubectl create configmap feature-flags', answer: 'kubectl create configmap feature-flags', validate: (c) => c.resources.some(r => r.type === 'configmap' && r.name === 'feature-flags') },
+      { id: 'lab13-4', task: 'Deploy "webapp" using the nginx image', hint: 'kubectl create deployment webapp --image=nginx', answer: 'kubectl create deployment webapp --image=nginx', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'webapp') },
+      { id: 'lab13-5', task: 'Create a Secret called "tls-cert" for TLS', hint: 'kubectl create secret tls-cert', answer: 'kubectl create secret tls-cert', validate: (c) => c.resources.some(r => r.type === 'secret' && r.name === 'tls-cert') },
+    ],
+  },
+
+  // ── INTERVIEW LAB 14: Node Maintenance ──
+  {
+    id: 'lab-node-maintenance',
+    title: 'Lab: Node Maintenance & Scheduling',
+    category: 'Interview Labs',
+    content: `
+<h2>🎯 Lab: Node Maintenance & Scheduling</h2>
+<p><strong>Interview Scenario:</strong> "One of your worker nodes needs a kernel upgrade. How do you safely take it out of rotation, ensure workloads are moved to other nodes, perform maintenance, and bring it back?"</p>
+
+<div class="info-box">
+  <strong>💡 Why this matters:</strong> Node maintenance is a day-2 operations question that comes up in every senior K8s interview. It tests your knowledge of cordon, drain, taints, and scheduling.
+</div>
+
+<h3>Your Tasks</h3>
+<ol>
+  <li>Deploy some workloads first (so there's something running)</li>
+  <li>Cordon node-1 to prevent new pods from scheduling</li>
+  <li>Taint node-1 to repel pods</li>
+  <li>After "maintenance", uncordon node-1</li>
+  <li>Label node-2 for specific workload targeting</li>
+</ol>
+
+<h3>Commands You'll Need</h3>
+<pre><code>kubectl create deployment web --image=nginx --replicas=4
+kubectl cordon node-1
+kubectl taint nodes node-1 maintenance=true:NoSchedule
+kubectl uncordon node-1
+kubectl label nodes node-2 tier=frontend</code></pre>
+`,
+    example: 'kubectl create deployment web --image=nginx --replicas=4',
+    expectedCommands: ['kubectl create deployment', 'kubectl cordon', 'kubectl taint', 'kubectl uncordon', 'kubectl label'],
+    hint: 'Deploy workloads first, then cordon and taint the node, do maintenance, then uncordon.',
+    challenges: [
+      { id: 'lab14-1', task: 'Create deployment "web" with 4 replicas', hint: 'kubectl create deployment web --image=nginx --replicas=4', answer: 'kubectl create deployment web --image=nginx --replicas=4', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'web' && r.metadata.replicas === 4) },
+      { id: 'lab14-2', task: 'Cordon node-1 to prevent scheduling', hint: 'kubectl cordon node-1', answer: 'kubectl cordon node-1', validate: (c) => c.resources.some(r => r.type === 'node' && r.name === 'node-1' && r.metadata.status === 'Ready,SchedulingDisabled') },
+      { id: 'lab14-3', task: 'Taint node-1 with maintenance=true:NoSchedule', hint: 'kubectl taint nodes node-1 maintenance=true:NoSchedule', answer: 'kubectl taint nodes node-1 maintenance=true:NoSchedule', validate: (c) => c.resources.some(r => r.type === 'node' && r.name === 'node-1' && Array.isArray(r.metadata.taints) && (r.metadata.taints as string[]).length > 0) },
+      { id: 'lab14-4', task: 'Uncordon node-1 after maintenance', hint: 'kubectl uncordon node-1', answer: 'kubectl uncordon node-1', validate: (c) => c.resources.some(r => r.type === 'node' && r.name === 'node-1' && r.metadata.status === 'Ready') },
+      { id: 'lab14-5', task: 'Label node-2 with tier=frontend', hint: 'kubectl label nodes node-2 tier=frontend', answer: 'kubectl label nodes node-2 tier=frontend', validate: (c) => c.resources.some(r => r.type === 'node' && r.name === 'node-2' && r.labels.tier === 'frontend') },
+    ],
+  },
 ];
 
 export const categories = [...new Set(lessons.map(l => l.category))];
