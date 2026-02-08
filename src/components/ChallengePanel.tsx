@@ -5,10 +5,9 @@ import type { ClusterState } from '../clusterState';
 interface ChallengePanelProps {
   challenges: Challenge[];
   cluster: ClusterState;
-  completedIds: Set<string>;
 }
 
-export default function ChallengePanel({ challenges, cluster, completedIds }: ChallengePanelProps) {
+export default function ChallengePanel({ challenges, cluster }: ChallengePanelProps) {
   const [showHints, setShowHints] = useState<Set<string>>(new Set());
   const [showAnswers, setShowAnswers] = useState<Set<string>>(new Set());
 
@@ -31,10 +30,9 @@ export default function ChallengePanel({ challenges, cluster, completedIds }: Ch
   const results = challenges.map(ch => ({
     ...ch,
     passed: ch.validate(cluster),
-    wasCompleted: completedIds.has(ch.id),
   }));
 
-  const allDone = results.every(r => r.passed || r.wasCompleted);
+  const allDone = results.every(r => r.passed);
 
   return (
     <div className="mt-8 p-5 rounded-xl border border-amber-500/30 bg-amber-500/5">
@@ -54,7 +52,7 @@ export default function ChallengePanel({ challenges, cluster, completedIds }: Ch
 
       <div className="space-y-3">
         {results.map((ch, i) => {
-          const isDone = ch.passed || ch.wasCompleted;
+          const isDone = ch.passed;
           return (
             <div
               key={ch.id}

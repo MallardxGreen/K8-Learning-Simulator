@@ -48,19 +48,6 @@ export default function App() {
 
   useEffect(() => {
     setCluster(makeInitialCluster());
-    // Clear challenge completions for this lesson so stale progress doesn't persist
-    const lessonChallengeIds = new Set(
-      (lessons.find(l => l.id === currentLesson.id)?.challenges ?? []).map(ch => ch.id)
-    );
-    if (lessonChallengeIds.size > 0) {
-      setProgress(prev => {
-        const cleaned = prev.completedChallenges.filter(id => !lessonChallengeIds.has(id));
-        if (cleaned.length === prev.completedChallenges.length) return prev;
-        const next = { ...prev, completedChallenges: cleaned };
-        saveProgress(next);
-        return next;
-      });
-    }
   }, [currentLesson.id]);
 
   const updateProgress = useCallback((update: Partial<UserProgress>) => {
@@ -97,15 +84,6 @@ export default function App() {
     return result;
   }, [cluster]);
 
-  const handleChallengeComplete = useCallback((challengeId: string) => {
-    setProgress(prev => {
-      if (prev.completedChallenges.includes(challengeId)) return prev;
-      const next = { ...prev, completedChallenges: [...prev.completedChallenges, challengeId] };
-      saveProgress(next);
-      return next;
-    });
-  }, []);
-
   const resetProgress = useCallback(() => {
     const fresh: UserProgress = { completedLessons: [], completedChallenges: [], currentLesson: lessons[0].id };
     setProgress(fresh);
@@ -114,18 +92,10 @@ export default function App() {
     setActiveTab('learn');
   }, []);
 
-  const completedChallengesSet = new Set(progress.completedChallenges);
   const hasPractice = !!currentLesson.example;
-
-  // Validate challenges against cluster state on every cluster change (works on both tabs)
-  useEffect(() => {
-    if (!currentLesson.challenges) return;
-    for (const ch of currentLesson.challenges) {
-      if (ch.validate(cluster)) {
-        handleChallengeComplete(ch.id);
-      }
-    }
-  }, [cluster, currentLesson.challenges, handleChallengeComplete]);
+  const challengesDone = currentLesson.challenges
+    ? currentLesson.challenges.filter(c => c.validate(cluster)).length
+    : 0;
 
   return (
     <div className="h-screen w-screen flex overflow-hidden bg-gray-950">
@@ -165,7 +135,7 @@ export default function App() {
             <span className="text-xs text-gray-600">{currentLesson.title}</span>
             {currentLesson.challenges && currentLesson.challenges.length > 0 && (
               <span className="text-xs text-amber-500">
-                🏆 {currentLesson.challenges.filter(c => completedChallengesSet.has(c.id)).length}/{currentLesson.challenges.length}
+                🏆 {challengesDone}/{currentLesson.challenges.length}
               </span>
             )}
           </div>
@@ -183,11 +153,10 @@ export default function App() {
               hasNext={currentIdx < lessons.length - 1}
               hasPrev={currentIdx > 0}
               cluster={cluster}
-              completedChallenges={completedChallengesSet}
               onSwitchToPractice={() => setActiveTab('practice')}
             />
           ) : (
-            <InteractivePanel lesson={currentLesson} cluster={cluster} onCommand={handleCommand} completedChallenges={completedChallengesSet} />
+            <InteractivePanel lesson={currentLesson} cluster={cluster} onCommand={handleCommand} />
           )}
         </div>
       </div>

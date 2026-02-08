@@ -8,10 +8,9 @@ interface InteractivePanelProps {
   lesson: Lesson;
   cluster: ClusterState;
   onCommand: (cmd: string) => { success: boolean; message: string };
-  completedChallenges: Set<string>;
 }
 
-export default function InteractivePanel({ lesson, cluster, onCommand, completedChallenges }: InteractivePanelProps) {
+export default function InteractivePanel({ lesson, cluster, onCommand }: InteractivePanelProps) {
   const [splitPercent, setSplitPercent] = useState(50);
   const [showGuide, setShowGuide] = useState(true);
   const [visibleHints, setVisibleHints] = useState<Set<string>>(new Set());
@@ -64,7 +63,7 @@ export default function InteractivePanel({ lesson, cluster, onCommand, completed
 
   const hasChallenges = lesson.challenges && lesson.challenges.length > 0;
   const challengesDone = hasChallenges
-    ? lesson.challenges!.filter(c => completedChallenges.has(c.id)).length
+    ? lesson.challenges!.filter(c => c.validate(cluster)).length
     : 0;
 
   return (
@@ -134,7 +133,7 @@ export default function InteractivePanel({ lesson, cluster, onCommand, completed
                   <p className="text-xs font-semibold text-amber-400 mb-1.5">🏆 Challenges</p>
                   <div className="space-y-1.5">
                     {lesson.challenges!.map(ch => {
-                      const done = completedChallenges.has(ch.id);
+                      const done = ch.validate(cluster);
                       return (
                         <div key={ch.id}>
                           <div className="flex items-start gap-1.5">
