@@ -114,6 +114,11 @@ const CP_INFO: Record<string, string> = {
 // Cluster-scoped resource types
 const CLUSTER_SCOPED = new Set(['namespace', 'node', 'persistentvolume', 'clusterrole', 'clusterrolebinding']);
 
+// Resource types that get scheduled onto worker nodes (only pods actually run on nodes)
+const NODE_SCHEDULED = new Set([
+  'pod',
+]);
+
 // Simple hash to assign a resource to a node index
 function assignNode(name: string, nodeCount: number): number {
   let h = 0;
@@ -130,30 +135,33 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
   // Categorize resources
   const nodes = cluster.resources.filter(r => r.type === 'node');
   const clusterScoped = cluster.resources.filter(r => CLUSTER_SCOPED.has(r.type) && r.type !== 'node' && r.type !== 'namespace');
-  const namespacedRes = cluster.resources.filter(r => !CLUSTER_SCOPED.has(r.type));
+  // Workloads go inside worker nodes
+  const workloadRes = cluster.resources.filter(r => NODE_SCHEDULED.has(r.type));
+  // Namespace-level API objects (services, configmaps, secrets, etc.) — not scheduled on nodes
+  const nsLevelRes = cluster.resources.filter(r => !CLUSTER_SCOPED.has(r.type) && !NODE_SCHEDULED.has(r.type));
 
-  const userResourceCount = namespacedRes.length + clusterScoped.length;
+  const userResourceCount = workloadRes.length + nsLevelRes.length + clusterScoped.length;
 
-  // Assign each namespaced resource to a worker node, then group by node → namespace
+  // Assign workload resources to worker nodes, grouped by node → namespace
   // Only assign root-level resources (not children) to nodes — children follow their parent
   const nodeData = useMemo(() => {
     if (nodes.length === 0) return [];
 
     // Identify which resources are children (have a parent in the resource list)
-    const allIds = new Set(namespacedRes.map(r => r.id));
+    const allIds = new Set(workloadRes.map(r => r.id));
     const childIds = new Set<string>();
-    for (const r of namespacedRes) {
+    for (const r of workloadRes) {
       const parentId = r.metadata.managedBy as string | undefined;
       if (parentId && allIds.has(parentId)) childIds.add(r.id);
     }
 
-    // Build: nodeIndex → nsName → resources[] (only root-level resources assigned to nodes)
+    // Build: nodeIndex → nsName → resources[]
     const map: Map<number, Map<string, K8sResource[]>> = new Map();
     for (let i = 0; i < nodes.length; i++) map.set(i, new Map());
 
     // Assign root resources to nodes
-    const rootResources = namespacedRes.filter(r => !childIds.has(r.id));
-    const rootNodeAssignment = new Map<string, number>(); // resource id → node index
+    const rootResources = workloadRes.filter(r => !childIds.has(r.id));
+    const rootNodeAssignment = new Map<string, number>();
 
     for (const r of rootResources) {
       const ni = assignNode(r.name, nodes.length);
@@ -168,11 +176,11 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
     function findRootAncestor(r: K8sResource): string {
       const parentId = r.metadata.managedBy as string | undefined;
       if (!parentId || !allIds.has(parentId)) return r.id;
-      const parent = namespacedRes.find(p => p.id === parentId);
+      const parent = workloadRes.find(p => p.id === parentId);
       return parent ? findRootAncestor(parent) : r.id;
     }
 
-    for (const r of namespacedRes) {
+    for (const r of workloadRes) {
       if (childIds.has(r.id)) {
         const rootId = findRootAncestor(r);
         const ni = rootNodeAssignment.get(rootId) ?? assignNode(r.name, nodes.length);
@@ -196,7 +204,7 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
         });
       return { node: n, taints, status, namespaces: nsList };
     });
-  }, [nodes, namespacedRes]);
+  }, [nodes, workloadRes]);
 
   // Measure the height of a tree group (parent card + children laid out in a row)
   const GROUP_PAD = 10;
@@ -299,6 +307,50 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
 
     cursorY = nodesStartY + maxNodeH + 20;
 
+    // Namespace-level API objects (deployments, replicasets, services, configmaps, secrets, etc.)
+    type NsLevelLayout = { nsName: string; x: number; y: number; w: number; h: number; trees: ResourceTree[]; orphans: K8sResource[] };
+    const nsLevelLayouts: NsLevelLayout[] = [];
+    if (nsLevelRes.length > 0) {
+      // Group by namespace
+      const byNs = new Map<string, K8sResource[]>();
+      for (const r of nsLevelRes) {
+        const ns = r.namespace || 'default';
+        if (!byNs.has(ns)) byNs.set(ns, []);
+        byNs.get(ns)!.push(r);
+      }
+      const defaultNsW = COLS * (CARD_W + GAP) + NS_PAD * 2 - GAP;
+      let nlX = PAD;
+      cursorY += 20;
+      for (const [nsName, resources] of [...byNs.entries()].sort(([a], [b]) => a === 'default' ? -1 : b === 'default' ? 1 : a.localeCompare(b))) {
+        const { trees, orphans } = buildOwnershipTrees(resources);
+        const treeSizes = trees.map(t => measureTree(t));
+        const maxTreeW = treeSizes.length > 0 ? Math.max(...treeSizes.map(s => s.w)) : 0;
+        const nsCols = 3;
+        const orphanColW = nsCols * (CARD_W + GAP) - GAP;
+        const boxW = Math.max(defaultNsW, maxTreeW + NS_PAD * 2, orphanColW + NS_PAD * 2);
+
+        let contentH = 24; // namespace label
+        for (const size of treeSizes) {
+          contentH += size.h + GAP;
+        }
+        if (orphans.length > 0) {
+          const orphanRows = Math.ceil(orphans.length / nsCols);
+          contentH += orphanRows * (CARD_H + GAP);
+        }
+        if (trees.length > 0 || orphans.length > 0) contentH -= GAP;
+        const boxH = NS_PAD + contentH + NS_PAD;
+
+        if (nlX + boxW > nodesMaxW + PAD * 2) {
+          nlX = PAD;
+          cursorY += boxH + GAP;
+        }
+        nsLevelLayouts.push({ nsName, x: nlX, y: cursorY, w: boxW, h: boxH, trees, orphans });
+        nlX += boxW + GAP;
+      }
+      const maxNlH = nsLevelLayouts.length > 0 ? Math.max(...nsLevelLayouts.map(n => n.h)) : 0;
+      cursorY += maxNlH + 20;
+    }
+
     // Cluster-scoped resources
     type CsLayout = { resource: K8sResource; x: number; y: number };
     const csLayouts: CsLayout[] = [];
@@ -320,8 +372,8 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
     const totalW = Math.max(nodesMaxW + PAD * 2, CP_W + PAD * 2, 520);
     const totalH = Math.max(cursorY + PAD, 280);
 
-    return { totalW, totalH, cpX, cpY, CP_W, CP_H, nodeLayouts, csLayouts };
-  }, [nodeData, clusterScoped]);
+    return { totalW, totalH, cpX, cpY, CP_W, CP_H, nodeLayouts, nsLevelLayouts, csLayouts };
+  }, [nodeData, nsLevelRes, clusterScoped]);
 
   // Zoom/pan handlers
   const zoomIn = useCallback(() => setZoom(z => Math.min(3, z + 0.15)), []);
@@ -523,6 +575,52 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
                 )}
               </g>
             ))}
+
+            {/* Namespace-level API objects (Deployments, Services, ConfigMaps, Secrets, etc.) */}
+            {layout.nsLevelLayouts.length > 0 && (
+              <>
+                <text x={layout.nsLevelLayouts[0].x} y={layout.nsLevelLayouts[0].y - 8} fill="#475569" fontSize={9} fontWeight={600} fontFamily="system-ui">📦 Namespace Resources (stored in etcd)</text>
+                {layout.nsLevelLayouts.map(nl => {
+                  const totalRes = nl.trees.reduce((s, t) => {
+                    const count = (tree: ResourceTree): number => 1 + tree.children.reduce((a, c) => a + count(c), 0);
+                    return s + count(t);
+                  }, 0) + nl.orphans.length;
+                  return (
+                    <g key={nl.nsName}>
+                      <rect x={nl.x} y={nl.y} width={nl.w} height={nl.h} rx={8} fill="rgba(99,102,241,0.05)" stroke="#6366f1" strokeWidth={1} strokeDasharray="4 2" />
+                      <g style={{ cursor: 'pointer' }}>
+                        <title>{`Namespace: ${nl.nsName}\n${totalRes} resource${totalRes !== 1 ? 's' : ''}\n\n${RESOURCE_INFO.namespace}`}</title>
+                        <text x={nl.x + NS_PAD} y={nl.y + 16} fill="#a78bfa" fontSize={9} fontWeight={600} fontFamily="system-ui">📁 ns/{nl.nsName}</text>
+                      </g>
+                      {/* Render ownership trees */}
+                      {(() => {
+                        let treeY = 24;
+                        return nl.trees.map(tree => {
+                          const size = measureTree(tree);
+                          const el = renderTree(tree, nl.x + NS_PAD, nl.y + NS_PAD + treeY);
+                          treeY += size.h + GAP;
+                          return el;
+                        });
+                      })()}
+                      {/* Render orphan resources as flat cards */}
+                      {(() => {
+                        let treeH = 24;
+                        for (const tree of nl.trees) {
+                          treeH += measureTree(tree).h + GAP;
+                        }
+                        return nl.orphans.map((r, i) => {
+                          const col = i % 3;
+                          const row = Math.floor(i / 3);
+                          const rx = nl.x + NS_PAD + col * (CARD_W + GAP);
+                          const ry = nl.y + NS_PAD + treeH + row * (CARD_H + GAP);
+                          return renderCard(r, rx, ry);
+                        });
+                      })()}
+                    </g>
+                  );
+                })}
+              </>
+            )}
 
             {/* Cluster-scoped resources */}
             {layout.csLayouts.length > 0 && (
