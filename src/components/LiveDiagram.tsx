@@ -27,156 +27,155 @@ const RESOURCE_STYLE: Record<string, { emoji: string; bg: string; border: string
   networkpolicy: { emoji: '🔥', bg: '#7f1d1d', border: '#dc2626', text: '#fca5a5' },
 };
 
-const NODE_W = 140;
-const NODE_H = 50;
-const GAP = 16;
-const NS_PAD = 16;
-const COLS_PER_NS = 3;
+const CARD_W = 136;
+const CARD_H = 46;
+const GAP = 12;
+const NS_PAD = 12;
+const COLS = 2;
 
-// Cluster-scoped resource types (not inside a namespace)
+// Cluster-scoped resource types
 const CLUSTER_SCOPED = new Set(['namespace', 'node', 'persistentvolume', 'clusterrole', 'clusterrolebinding']);
 
+// Simple hash to assign a resource to a node index
+function assignNode(name: string, nodeCount: number): number {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = ((h << 5) - h + name.charCodeAt(i)) | 0;
+  return Math.abs(h) % nodeCount;
+}
+
 export default function LiveDiagram({ cluster }: LiveDiagramProps) {
-  const [zoom, setZoom] = useState(0.75);
+  const [zoom, setZoom] = useState(0.85);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const isPanning = useRef(false);
   const lastMouse = useRef({ x: 0, y: 0 });
 
-  // Separate resources
+  // Categorize resources
   const nodes = cluster.resources.filter(r => r.type === 'node');
-  const namespaces = cluster.resources.filter(r => r.type === 'namespace');
   const clusterScoped = cluster.resources.filter(r => CLUSTER_SCOPED.has(r.type) && r.type !== 'node' && r.type !== 'namespace');
   const namespacedRes = cluster.resources.filter(r => !CLUSTER_SCOPED.has(r.type));
 
-  // Group namespaced resources by namespace
-  const byNamespace = useMemo(() => {
-    const map: Record<string, K8sResource[]> = {};
-    for (const ns of namespaces) {
-      map[ns.name] = [];
-    }
-    for (const r of namespacedRes) {
-      const ns = r.namespace || 'default';
-      if (!map[ns]) map[ns] = [];
-      map[ns].push(r);
-    }
-    return map;
-  }, [namespaces, namespacedRes]);
-
-  // Only show namespaces that have user resources (or are non-system)
-  const visibleNamespaces = useMemo(() => {
-    return Object.entries(byNamespace)
-      .filter(([name, res]) => res.length > 0 || (name !== 'kube-system'))
-      .sort(([a], [b]) => {
-        if (a === 'default') return -1;
-        if (b === 'default') return 1;
-        return a.localeCompare(b);
-      });
-  }, [byNamespace]);
-
   const userResourceCount = namespacedRes.length + clusterScoped.length;
+
+  // Assign each namespaced resource to a worker node, then group by node → namespace
+  const nodeData = useMemo(() => {
+    if (nodes.length === 0) return [];
+
+    // Build: nodeIndex → nsName → resources[]
+    const map: Map<number, Map<string, K8sResource[]>> = new Map();
+    for (let i = 0; i < nodes.length; i++) map.set(i, new Map());
+
+    for (const r of namespacedRes) {
+      const ni = assignNode(r.id, nodes.length);
+      const nsName = r.namespace || 'default';
+      const nodeMap = map.get(ni)!;
+      if (!nodeMap.has(nsName)) nodeMap.set(nsName, []);
+      nodeMap.get(nsName)!.push(r);
+    }
+
+    return nodes.map((n, i) => {
+      const nsMap = map.get(i)!;
+      const taints = Array.isArray(n.metadata.taints) ? (n.metadata.taints as string[]) : [];
+      const status = (n.metadata.status as string) || 'Ready';
+      // Sort namespaces: default first, then alphabetical
+      const nsList = [...nsMap.entries()]
+        .filter(([, res]) => res.length > 0)
+        .sort(([a], [b]) => {
+          if (a === 'default') return -1;
+          if (b === 'default') return 1;
+          return a.localeCompare(b);
+        });
+      return { node: n, taints, status, namespaces: nsList };
+    });
+  }, [nodes, namespacedRes]);
 
   // Layout computation
   const layout = useMemo(() => {
-    const CONTROL_PLANE_H = 70;
-    const CONTROL_PLANE_W = 500;
-    const CLUSTER_PAD = 20;
-    const NODE_BOX_PAD = 16;
+    const PAD = 20;
+    const CP_W = 500;
+    const CP_H = 70;
+    const NODE_PAD = 14;
+    const NODE_HEADER = 40;
 
-    let totalW = 0;
-    let totalH = 0;
+    let cursorY = PAD;
 
-    // Control plane at top
-    const cpX = CLUSTER_PAD;
-    const cpY = CLUSTER_PAD;
-    totalW = Math.max(totalW, cpX + CONTROL_PLANE_W + CLUSTER_PAD);
-    totalH = cpY + CONTROL_PLANE_H + 20;
+    // Control Plane
+    const cpX = PAD;
+    const cpY = cursorY;
+    cursorY += CP_H + 20;
 
-    // Worker nodes side by side below control plane
-    const nodesStartY = totalH;
-    const nodeLayouts: { name: string; x: number; y: number; w: number; h: number; taints: string[]; status: string }[] = [];
+    // Compute each worker node box
+    type NsLayout = { name: string; x: number; y: number; w: number; h: number; resources: K8sResource[] };
+    type NodeLayout = { name: string; x: number; y: number; w: number; h: number; taints: string[]; status: string; nsBoxes: NsLayout[] };
 
-    // Calculate namespace boxes for each node (we distribute namespaces across nodes)
-    // For simplicity: all namespaces go inside a "worker nodes" area
-    // Each namespace is a box containing its resources in a grid
+    const nodeLayouts: NodeLayout[] = [];
+    const nodesStartY = cursorY;
+    let nodesMaxW = CP_W;
 
-    const nsLayouts: { name: string; x: number; y: number; w: number; h: number; resources: K8sResource[] }[] = [];
+    // Lay out nodes side by side
+    let nodeX = PAD;
+    for (const nd of nodeData) {
+      const nsBoxes: NsLayout[] = [];
+      let innerY = NODE_HEADER;
+      const nsW = COLS * (CARD_W + GAP) + NS_PAD * 2 - GAP;
 
-    let nsX = CLUSTER_PAD + NODE_BOX_PAD + 12;
-    let nsY = nodesStartY + 50; // leave room for node header
-    let maxNsRowH = 0;
-    const maxRowW = 800;
-
-    for (const [nsName, nsRes] of visibleNamespaces) {
-      const rows = Math.ceil(nsRes.length / COLS_PER_NS) || 1;
-      const nsW = COLS_PER_NS * (NODE_W + GAP) + NS_PAD * 2 - GAP;
-      const nsH = NS_PAD * 2 + 24 + rows * (NODE_H + GAP) - GAP;
-
-      if (nsX + nsW > maxRowW) {
-        nsX = CLUSTER_PAD + NODE_BOX_PAD + 12;
-        nsY += maxNsRowH + GAP;
-        maxNsRowH = 0;
+      for (const [nsName, nsRes] of nd.namespaces) {
+        const rows = Math.ceil(nsRes.length / COLS) || 1;
+        const nsH = NS_PAD + 20 + rows * (CARD_H + GAP) - GAP + NS_PAD;
+        nsBoxes.push({ name: nsName, x: NODE_PAD, y: innerY, w: nsW, h: nsH, resources: nsRes });
+        innerY += nsH + GAP;
       }
 
-      nsLayouts.push({ name: nsName, x: nsX, y: nsY, w: nsW, h: nsH, resources: nsRes });
-      maxNsRowH = Math.max(maxNsRowH, nsH);
-      nsX += nsW + GAP;
-      totalW = Math.max(totalW, nsX + CLUSTER_PAD);
-    }
+      const nodeW = nsW + NODE_PAD * 2;
+      const nodeH = nd.namespaces.length > 0 ? innerY + NODE_PAD - GAP : NODE_HEADER + 20;
 
-    const nsEndY = nsY + maxNsRowH + NODE_BOX_PAD;
-
-    // Worker node boxes encompass the namespace area
-    const nodeAreaW = Math.max(totalW - CLUSTER_PAD * 2, CONTROL_PLANE_W);
-    for (let i = 0; i < nodes.length; i++) {
-      const n = nodes[i];
-      const nW = (nodeAreaW - GAP * (nodes.length - 1)) / nodes.length;
-      const nX = CLUSTER_PAD + i * (nW + GAP);
-      const nH = nsEndY - nodesStartY + 10;
-      const taints = Array.isArray(n.metadata.taints) ? (n.metadata.taints as string[]) : [];
       nodeLayouts.push({
-        name: n.name,
-        x: nX,
+        name: nd.node.name,
+        x: nodeX,
         y: nodesStartY,
-        w: nW,
-        h: nH,
-        taints,
-        status: (n.metadata.status as string) || 'Ready',
+        w: nodeW,
+        h: nodeH,
+        taints: nd.taints,
+        status: nd.status,
+        nsBoxes,
       });
+      nodeX += nodeW + GAP;
     }
 
-    totalW = Math.max(totalW, CLUSTER_PAD * 2 + nodeAreaW);
-    totalH = nsEndY + 20;
+    nodesMaxW = Math.max(nodesMaxW, nodeX - GAP - PAD);
+    const maxNodeH = nodeLayouts.reduce((m, n) => Math.max(m, n.h), 0);
+    // Equalize node heights
+    for (const nl of nodeLayouts) nl.h = maxNodeH;
 
-    // Cluster-scoped resources below nodes
-    let csY = totalH;
-    const csLayouts: { resource: K8sResource; x: number; y: number }[] = [];
+    cursorY = nodesStartY + maxNodeH + 20;
+
+    // Cluster-scoped resources
+    type CsLayout = { resource: K8sResource; x: number; y: number };
+    const csLayouts: CsLayout[] = [];
     if (clusterScoped.length > 0) {
-      let csX = CLUSTER_PAD;
+      let csX = PAD;
+      const csStartY = cursorY + 16;
+      let csY = csStartY;
       for (const r of clusterScoped) {
-        if (csX + NODE_W > totalW - CLUSTER_PAD) {
-          csX = CLUSTER_PAD;
-          csY += NODE_H + GAP;
+        if (csX + CARD_W > nodesMaxW + PAD * 2) {
+          csX = PAD;
+          csY += CARD_H + GAP;
         }
         csLayouts.push({ resource: r, x: csX, y: csY });
-        csX += NODE_W + GAP;
+        csX += CARD_W + GAP;
       }
-      totalH = csY + NODE_H + CLUSTER_PAD;
+      cursorY = csY + CARD_H + PAD;
     }
 
-    return {
-      totalW: Math.max(totalW, 560),
-      totalH: Math.max(totalH, 300),
-      cpX, cpY, CONTROL_PLANE_W, CONTROL_PLANE_H,
-      nodeLayouts,
-      nsLayouts,
-      csLayouts,
-    };
-  }, [nodes, visibleNamespaces, clusterScoped]);
+    const totalW = Math.max(nodesMaxW + PAD * 2, CP_W + PAD * 2, 520);
+    const totalH = Math.max(cursorY + PAD, 280);
+
+    return { totalW, totalH, cpX, cpY, CP_W, CP_H, nodeLayouts, csLayouts };
+  }, [nodeData, clusterScoped]);
 
   // Zoom/pan handlers
   const zoomIn = useCallback(() => setZoom(z => Math.min(3, z + 0.15)), []);
   const zoomOut = useCallback(() => setZoom(z => Math.max(0.15, z - 0.15)), []);
-  const resetView = useCallback(() => { setZoom(0.75); setPan({ x: 0, y: 0 }); }, []);
+  const resetView = useCallback(() => { setZoom(0.85); setPan({ x: 0, y: 0 }); }, []);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
@@ -201,19 +200,18 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
     return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
   }, []);
 
-  // Helper to render a resource card
-  function renderResource(r: K8sResource, x: number, y: number) {
+  function renderCard(r: K8sResource, x: number, y: number) {
     const style = RESOURCE_STYLE[r.type] || RESOURCE_STYLE.pod;
-    const displayName = r.name.length > 14 ? r.name.slice(0, 13) + '…' : r.name;
+    const label = r.name.length > 13 ? r.name.slice(0, 12) + '…' : r.name;
     const status = r.metadata.status as string | undefined;
     return (
       <g key={r.id}>
-        <rect x={x} y={y} width={NODE_W} height={NODE_H} rx={8} fill={style.bg} stroke={style.border} strokeWidth={1.5} />
-        <text x={x + 12} y={y + 20} fontSize={14}>{style.emoji}</text>
-        <text x={x + 32} y={y + 20} fill={style.text} fontSize={10} fontWeight={600} fontFamily="system-ui">{displayName}</text>
-        <text x={x + 12} y={y + 38} fill="#64748b" fontSize={8} fontFamily="system-ui">{r.type}</text>
+        <rect x={x} y={y} width={CARD_W} height={CARD_H} rx={7} fill={style.bg} stroke={style.border} strokeWidth={1.5} />
+        <text x={x + 10} y={y + 18} fontSize={13}>{style.emoji}</text>
+        <text x={x + 28} y={y + 18} fill={style.text} fontSize={9.5} fontWeight={600} fontFamily="system-ui">{label}</text>
+        <text x={x + 10} y={y + 34} fill="#64748b" fontSize={7.5} fontFamily="system-ui">{r.type}</text>
         {status && (
-          <text x={x + NODE_W - 10} y={y + 38} fill={status === 'Running' ? '#10b981' : status.includes('Disabled') ? '#ef4444' : '#f59e0b'} fontSize={8} textAnchor="end" fontFamily="system-ui">● {status}</text>
+          <text x={x + CARD_W - 8} y={y + 34} fill={status === 'Running' ? '#10b981' : status.includes('Disabled') ? '#ef4444' : '#f59e0b'} fontSize={7.5} textAnchor="end" fontFamily="system-ui">● {status}</text>
         )}
       </g>
     );
@@ -237,11 +235,7 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
       </div>
 
       {/* SVG Canvas */}
-      <div
-        className="flex-1 overflow-hidden cursor-grab active:cursor-grabbing"
-        onWheel={handleWheel}
-        onMouseDown={handleMouseDown}
-      >
+      <div className="flex-1 overflow-hidden cursor-grab active:cursor-grabbing" onWheel={handleWheel} onMouseDown={handleMouseDown}>
         <svg width="100%" height="100%" style={{ overflow: 'visible' }}>
           <defs>
             <pattern id="grid" width="30" height="30" patternUnits="userSpaceOnUse">
@@ -249,74 +243,65 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
             </pattern>
           </defs>
           <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
-            {/* Background grid */}
             <rect width={layout.totalW} height={layout.totalH} fill="url(#grid)" />
 
-            {/* ═══ CLUSTER BOUNDARY ═══ */}
-            <rect x={4} y={4} width={layout.totalW - 8} height={layout.totalH - 8} rx={16} fill="none" stroke="#334155" strokeWidth={2} strokeDasharray="8 4" />
-            <text x={16} y={22} fill="#475569" fontSize={11} fontWeight={700} fontFamily="system-ui">☸️ KUBERNETES CLUSTER</text>
+            {/* Cluster boundary */}
+            <rect x={4} y={4} width={layout.totalW - 8} height={layout.totalH - 8} rx={14} fill="none" stroke="#334155" strokeWidth={2} strokeDasharray="8 4" />
+            <text x={14} y={20} fill="#475569" fontSize={10} fontWeight={700} fontFamily="system-ui">☸️ KUBERNETES CLUSTER</text>
 
-            {/* ═══ CONTROL PLANE ═══ */}
-            <rect x={layout.cpX} y={layout.cpY} width={layout.CONTROL_PLANE_W} height={layout.CONTROL_PLANE_H} rx={12} fill="#0f172a" stroke="#6366f1" strokeWidth={1.5} />
-            <text x={layout.cpX + 14} y={layout.cpY + 20} fill="#a78bfa" fontSize={11} fontWeight={700} fontFamily="system-ui">🧠 Control Plane (Master)</text>
-            {/* Control plane components */}
+            {/* Control Plane */}
+            <rect x={layout.cpX} y={layout.cpY} width={layout.CP_W} height={layout.CP_H} rx={10} fill="#0f172a" stroke="#6366f1" strokeWidth={1.5} />
+            <text x={layout.cpX + 12} y={layout.cpY + 18} fill="#a78bfa" fontSize={10} fontWeight={700} fontFamily="system-ui">🧠 Control Plane (Master)</text>
             {['API Server', 'etcd', 'Scheduler', 'Controller Mgr'].map((comp, i) => {
-              const cx = layout.cpX + 14 + i * 120;
-              const cy = layout.cpY + 32;
+              const cx = layout.cpX + 12 + i * 120;
+              const cy = layout.cpY + 30;
               return (
                 <g key={comp}>
-                  <rect x={cx} y={cy} width={108} height={26} rx={6} fill="#1e1b4b" stroke="#4f46e5" strokeWidth={1} />
-                  <text x={cx + 54} y={cy + 17} fill="#818cf8" fontSize={9} fontFamily="system-ui" textAnchor="middle">{comp}</text>
+                  <rect x={cx} y={cy} width={110} height={26} rx={6} fill="#1e1b4b" stroke="#4f46e5" strokeWidth={1} />
+                  <text x={cx + 55} y={cy + 17} fill="#818cf8" fontSize={9} fontFamily="system-ui" textAnchor="middle">{comp}</text>
                 </g>
               );
             })}
 
-            {/* ═══ WORKER NODES ═══ */}
+            {/* Worker Nodes */}
             {layout.nodeLayouts.map(n => (
               <g key={n.name}>
-                <rect x={n.x} y={n.y} width={n.w} height={n.h} rx={12} fill="#0c1222" stroke={n.status.includes('Disabled') ? '#ef4444' : '#0ea5e9'} strokeWidth={1.5} />
-                <text x={n.x + 14} y={n.y + 20} fill={n.status.includes('Disabled') ? '#fca5a5' : '#7dd3fc'} fontSize={11} fontWeight={700} fontFamily="system-ui">
-                  🖥️ {n.name} (Worker Node)
+                <rect x={n.x} y={n.y} width={n.w} height={n.h} rx={10} fill="#0c1222" stroke={n.status.includes('Disabled') ? '#ef4444' : '#0ea5e9'} strokeWidth={1.5} />
+                <text x={n.x + 12} y={n.y + 18} fill={n.status.includes('Disabled') ? '#fca5a5' : '#7dd3fc'} fontSize={10} fontWeight={700} fontFamily="system-ui">
+                  🖥️ {n.name} (Worker)
                 </text>
-                <text x={n.x + n.w - 14} y={n.y + 20} fill={n.status === 'Ready' ? '#10b981' : '#ef4444'} fontSize={9} textAnchor="end" fontFamily="system-ui">
-                  ● {n.status}
-                </text>
+                <text x={n.x + n.w - 12} y={n.y + 18} fill={n.status === 'Ready' ? '#10b981' : '#ef4444'} fontSize={8} textAnchor="end" fontFamily="system-ui">● {n.status}</text>
                 {n.taints.length > 0 && (
-                  <text x={n.x + 14} y={n.y + 34} fill="#f59e0b" fontSize={8} fontFamily="system-ui">
-                    ⚠️ Taints: {n.taints.join(', ')}
-                  </text>
+                  <text x={n.x + 12} y={n.y + 32} fill="#f59e0b" fontSize={7.5} fontFamily="system-ui">⚠️ Taints: {n.taints.join(', ')}</text>
+                )}
+
+                {/* Namespace boxes inside this node */}
+                {n.nsBoxes.map(ns => (
+                  <g key={ns.name}>
+                    <rect x={n.x + ns.x} y={n.y + ns.y} width={ns.w} height={ns.h} rx={8} fill="rgba(99,102,241,0.05)" stroke="#6366f1" strokeWidth={1} strokeDasharray="4 2" />
+                    <text x={n.x + ns.x + NS_PAD} y={n.y + ns.y + 14} fill="#a78bfa" fontSize={9} fontWeight={600} fontFamily="system-ui">📁 ns/{ns.name}</text>
+                    {ns.resources.map((r, i) => {
+                      const col = i % COLS;
+                      const row = Math.floor(i / COLS);
+                      const rx = n.x + ns.x + NS_PAD + col * (CARD_W + GAP);
+                      const ry = n.y + ns.y + 20 + NS_PAD + row * (CARD_H + GAP);
+                      return renderCard(r, rx, ry);
+                    })}
+                  </g>
+                ))}
+
+                {/* Empty node message */}
+                {n.nsBoxes.length === 0 && (
+                  <text x={n.x + n.w / 2} y={n.y + n.h / 2 + 4} fill="#1e293b" fontSize={9} textAnchor="middle" fontFamily="system-ui">no workloads scheduled</text>
                 )}
               </g>
             ))}
 
-            {/* ═══ NAMESPACE BOXES ═══ */}
-            {layout.nsLayouts.map(ns => (
-              <g key={ns.name}>
-                <rect x={ns.x} y={ns.y} width={ns.w} height={ns.h} rx={10} fill="#0f172a" stroke="#6366f1" strokeWidth={1} strokeDasharray="4 2" opacity={0.8} />
-                <text x={ns.x + NS_PAD} y={ns.y + 16} fill="#a78bfa" fontSize={10} fontWeight={600} fontFamily="system-ui">
-                  📁 ns/{ns.name}
-                </text>
-                {/* Resources inside namespace */}
-                {ns.resources.map((r, i) => {
-                  const col = i % COLS_PER_NS;
-                  const row = Math.floor(i / COLS_PER_NS);
-                  const rx = ns.x + NS_PAD + col * (NODE_W + GAP);
-                  const ry = ns.y + 24 + NS_PAD + row * (NODE_H + GAP);
-                  return renderResource(r, rx, ry);
-                })}
-                {ns.resources.length === 0 && (
-                  <text x={ns.x + ns.w / 2} y={ns.y + ns.h / 2 + 8} fill="#334155" fontSize={9} textAnchor="middle" fontFamily="system-ui">(empty)</text>
-                )}
-              </g>
-            ))}
-
-            {/* ═══ CLUSTER-SCOPED RESOURCES ═══ */}
+            {/* Cluster-scoped resources */}
             {layout.csLayouts.length > 0 && (
               <>
-                <text x={layout.csLayouts[0].x} y={layout.csLayouts[0].y - 8} fill="#475569" fontSize={10} fontWeight={600} fontFamily="system-ui">
-                  🌍 Cluster-Scoped Resources
-                </text>
-                {layout.csLayouts.map(({ resource, x, y }) => renderResource(resource, x, y))}
+                <text x={layout.csLayouts[0].x} y={layout.csLayouts[0].y - 8} fill="#475569" fontSize={9} fontWeight={600} fontFamily="system-ui">🌍 Cluster-Scoped Resources</text>
+                {layout.csLayouts.map(({ resource, x, y }) => renderCard(resource, x, y))}
               </>
             )}
           </g>
