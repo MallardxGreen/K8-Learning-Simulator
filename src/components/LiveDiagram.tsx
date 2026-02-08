@@ -375,7 +375,13 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
-    setZoom(z => Math.min(3, Math.max(0.15, z + (e.deltaY > 0 ? -0.08 : 0.08))));
+    if (e.ctrlKey || e.metaKey) {
+      // Pinch-to-zoom or ctrl+scroll = zoom
+      setZoom(z => Math.min(3, Math.max(0.15, z + (e.deltaY > 0 ? -0.08 : 0.08))));
+    } else {
+      // Regular scroll = pan
+      setPan(p => ({ x: p.x - e.deltaX, y: p.y - e.deltaY }));
+    }
   }, []);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {

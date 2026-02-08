@@ -44,6 +44,9 @@ function normalizeType(input: string): string {
     cm: 'configmap', cms: 'configmap',
     ing: 'ingress', no: 'node', po: 'pod',
     rb: 'rolebinding', crb: 'clusterrolebinding', cr: 'clusterrole',
+    cs: 'componentstatus', componentstatuses: 'componentstatus',
+    ev: 'event', events: 'event',
+    ep: 'endpoints', endpoints: 'endpoint',
   };
   if (map[input]) return map[input];
   if (input.endsWith('s') && !input.endsWith('ss')) return input.slice(0, -1);
@@ -125,6 +128,13 @@ export function parseAndExecute(state: ClusterState, input: string): { state: Cl
     case 'logs': return handleLogs(state, tokens, ns);
     case 'cluster-info':
       return { state, result: { success: true, message: 'Kubernetes control plane is running at https://127.0.0.1:6443\nCoreDNS is running at https://127.0.0.1:6443/api/v1/namespaces/kube-system/services/kube-dns:dns/proxy' } };
+    case 'version':
+      return { state, result: { success: true, message: 'Client Version: v1.31.0\nKustomize Version: v5.4.2\nServer Version: v1.31.0' } };
+    case 'api-resources':
+      return { state, result: { success: true, message: getApiResourcesText() } };
+    case 'api-versions':
+      return { state, result: { success: true, message: 'apps/v1\nbatch/v1\nnetworking.k8s.io/v1\nrbac.authorization.k8s.io/v1\nstorage.k8s.io/v1\nv1' } };
+    case 'config': return handleConfig(state, tokens);
     case 'help': return { state, result: { success: true, message: getHelpText() } };
     default:
       return { state, result: { success: false, message: `Unknown action "${action}". Type "kubectl help" for available commands.` } };
@@ -368,8 +378,45 @@ function handleGet(state: ClusterState, tokens: string[], ns: string): { state: 
   if (!resourceType) return { state, result: { success: false, message: 'Usage: kubectl get <type>' } };
 
   const normalizedType = normalizeType(resourceType);
-
   const allNs = tokens.includes('--all-namespaces') || tokens.includes('-A');
+
+  // Special virtual resource types
+  if (normalizedType === 'componentstatus') {
+    const components = [
+      { name: 'scheduler', status: 'Healthy', message: 'ok' },
+      { name: 'controller-manager', status: 'Healthy', message: 'ok' },
+      { name: 'etcd-0', status: 'Healthy', message: '{"health":"true","reason":""}' },
+    ];
+    const header = 'NAME                 STATUS    MESSAGE';
+    const lines = components.map(c => `${c.name.padEnd(21)}${c.status.padEnd(10)}${c.message}`);
+    return { state, result: { success: true, message: `${header}\n${lines.join('\n')}` } };
+  }
+
+  if (normalizedType === 'event') {
+    const recentRes = state.resources.slice(-10);
+    if (recentRes.length === 0) return { state, result: { success: true, message: 'No events found.' } };
+    const header = 'LAST SEEN   TYPE     REASON      OBJECT                MESSAGE';
+    const lines = recentRes.map(r => {
+      const age = '2m';
+      const kind = r.type.charAt(0).toUpperCase() + r.type.slice(1);
+      return `${age.padEnd(12)}${'Normal'.padEnd(9)}${'Scheduled'.padEnd(12)}${(kind + '/' + r.name).padEnd(22)}Successfully assigned ${r.namespace || 'default'}/${r.name}`;
+    });
+    return { state, result: { success: true, message: `${header}\n${lines.join('\n')}` } };
+  }
+
+  if (normalizedType === 'endpoint') {
+    const svcs = state.resources.filter(r => r.type === 'service' && (allNs || r.namespace === ns));
+    if (svcs.length === 0) return { state, result: { success: true, message: 'No resources found.' } };
+    const header = 'NAME                    ENDPOINTS                     AGE';
+    const lines = svcs.map(s => {
+      const port = s.metadata.port as string || '80';
+      const pods = state.resources.filter(r => r.type === 'pod' && r.namespace === s.namespace);
+      const eps = pods.length > 0 ? pods.map((_, i) => `10.244.${i}.${2 + i}:${port}`).join(', ') : '<none>';
+      return `${s.name.padEnd(24)}${eps.padEnd(30)}5m`;
+    });
+    return { state, result: { success: true, message: `${header}\n${lines.join('\n')}` } };
+  }
+
   const showLabels = tokens.includes('--show-labels');
   const filtered = state.resources.filter(r => {
     if (normalizedType !== 'all' && r.type !== normalizedType) return false;
@@ -823,6 +870,83 @@ function getHelpText(): string {
   kubectl uncordon <node>                               Mark node as schedulable
   kubectl auth can-i <verb> <resource>                  Check RBAC permissions
   kubectl cluster-info                                  Show cluster info
+  kubectl version                                       Show client/server version
+  kubectl api-resources                                 List all resource types
+  kubectl api-versions                                  List API versions
+  kubectl config view                                   Show kubeconfig
+  kubectl config current-context                        Show current context
+  kubectl get componentstatuses                         Check control plane health (alias: cs)
+  kubectl get events                                    Show cluster events (alias: ev)
+  kubectl get endpoints                                 Show service endpoints (alias: ep)
   kubectl help                                          Show this help
+
+  etcdctl get /registry/                                List all etcd keys (filter by prefix)
+  etcdctl endpoint status                               Show etcd status
+  etcdctl member list                                   List etcd members
+  etcdctl help                                          Show etcdctl help
+
   clear                                                 Clear terminal`;
+}
+
+function getApiResourcesText(): string {
+  return `NAME                      SHORTNAMES   APIVERSION                     NAMESPACED   KIND
+pods                      po           v1                             true         Pod
+services                  svc          v1                             true         Service
+deployments               deploy       apps/v1                        true         Deployment
+replicasets               rs           apps/v1                        true         ReplicaSet
+statefulsets              sts          apps/v1                        true         StatefulSet
+daemonsets                ds           apps/v1                        true         DaemonSet
+jobs                                   batch/v1                       true         Job
+cronjobs                               batch/v1                       true         CronJob
+configmaps                cm           v1                             true         ConfigMap
+secrets                                v1                             true         Secret
+serviceaccounts           sa           v1                             true         ServiceAccount
+namespaces                ns           v1                             false        Namespace
+nodes                     no           v1                             false        Node
+persistentvolumes         pv           v1                             false        PersistentVolume
+persistentvolumeclaims    pvc          v1                             true         PersistentVolumeClaim
+ingresses                 ing          networking.k8s.io/v1           true         Ingress
+networkpolicies           netpol       networking.k8s.io/v1           true         NetworkPolicy
+roles                                  rbac.authorization.k8s.io/v1   true         Role
+clusterroles              cr           rbac.authorization.k8s.io/v1   false        ClusterRole
+rolebindings              rb           rbac.authorization.k8s.io/v1   true         RoleBinding
+clusterrolebindings       crb          rbac.authorization.k8s.io/v1   false        ClusterRoleBinding
+componentstatuses         cs           v1                             false        ComponentStatus
+events                    ev           v1                             true         Event
+endpoints                 ep           v1                             true         Endpoints`;
+}
+
+function handleConfig(state: ClusterState, tokens: string[]): { state: ClusterState; result: CommandResult } {
+  const sub = tokens[0];
+  if (sub === 'view') {
+    return { state, result: { success: true, message:
+`apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    server: https://127.0.0.1:6443
+    certificate-authority-data: DATA+OMITTED
+  name: k8s-simulator
+contexts:
+- context:
+    cluster: k8s-simulator
+    user: admin
+    namespace: default
+  name: k8s-simulator
+current-context: k8s-simulator
+users:
+- name: admin
+  user:
+    client-certificate-data: DATA+OMITTED
+    client-key-data: DATA+OMITTED` } };
+  }
+  if (sub === 'current-context') {
+    return { state, result: { success: true, message: 'k8s-simulator' } };
+  }
+  if (sub === 'get-contexts') {
+    return { state, result: { success: true, message:
+`CURRENT   NAME             CLUSTER          AUTHINFO   NAMESPACE
+*         k8s-simulator    k8s-simulator    admin      default` } };
+  }
+  return { state, result: { success: false, message: `Unknown config subcommand "${sub}". Try: view, current-context, get-contexts` } };
 }
