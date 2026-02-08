@@ -40,7 +40,7 @@ export default function Sidebar({ currentLessonId, progress, onSelectLesson, onR
         </p>
       </div>
 
-      <nav className="flex-1 overflow-y-auto py-2">
+      <nav className="flex-1 overflow-y-auto scrollbar-hidden py-2">
         {Object.entries(grouped).map(([category, catLessons]) => (
           <div key={category} className="mb-1">
             <div className="px-5 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
