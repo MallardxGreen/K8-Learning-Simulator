@@ -29,6 +29,29 @@ function createResource(
   return { id: genId(), type, name, namespace, labels, metadata, createdAt: Date.now() };
 }
 
+
+/** Normalize a resource type: handle abbreviations and strip trailing 's' for plurals. */
+function normalizeType(input: string): string {
+  const map: Record<string, string> = {
+    pv: 'persistentvolume', pvs: 'persistentvolume',
+    pvc: 'persistentvolumeclaim', pvcs: 'persistentvolumeclaim',
+    sa: 'serviceaccount', sas: 'serviceaccount',
+    svc: 'service', svcs: 'service',
+    ns: 'namespace',
+    netpol: 'networkpolicy', netpols: 'networkpolicy',
+    deploy: 'deployment', deploys: 'deployment',
+    ds: 'daemonset', sts: 'statefulset', rs: 'replicaset',
+    cm: 'configmap', cms: 'configmap',
+    ing: 'ingress', no: 'node', po: 'pod',
+    rb: 'rolebinding', crb: 'clusterrolebinding', cr: 'clusterrole',
+  };
+  if (map[input]) return map[input];
+  if (input.endsWith('s') && !input.endsWith('ss')) return input.slice(0, -1);
+  return input;
+}
+
+const CLUSTER_SCOPED = ['namespace', 'persistentvolume', 'clusterrole', 'clusterrolebinding', 'node'];
+
 export function parseAndExecute(state: ClusterState, input: string): { state: ClusterState; result: CommandResult } {
   const trimmed = input.trim();
   if (!trimmed.startsWith('kubectl')) {
@@ -56,6 +79,9 @@ export function parseAndExecute(state: ClusterState, input: string): { state: Cl
     case 'taint': return handleTaint(state, tokens);
     case 'cordon': return handleCordon(state, tokens, true);
     case 'uncordon': return handleCordon(state, tokens, false);
+    case 'drain': return handleDrain(state, tokens);
+    case 'top': return handleTop(state, tokens, ns);
+    case 'logs': return handleLogs(state, tokens, ns);
     case 'cluster-info':
       return { state, result: { success: true, message: 'Kubernetes control plane is running at https://127.0.0.1:6443\nCoreDNS is running at https://127.0.0.1:6443/api/v1/namespaces/kube-system/services/kube-dns:dns/proxy' } };
     case 'help': return { state, result: { success: true, message: getHelpText() } };
@@ -103,7 +129,24 @@ function handleRun(state: ClusterState, tokens: string[], ns: string): { state: 
   const existing = state.resources.find(r => r.type === 'pod' && r.name === podName && r.namespace === ns);
   if (existing) return { state, result: { success: false, message: `Error: pod "${podName}" already exists` } };
 
-  const pod = createResource('pod', podName, ns, labels, { image, status: 'Running' });
+  const livenessProbe = extractFlagValue(tokens, '--liveness-probe=');
+  const readinessProbe = extractFlagValue(tokens, '--readiness-probe=');
+  const startupProbe = extractFlagValue(tokens, '--startup-probe=');
+  const runAsNonRoot = tokens.includes('--run-as-non-root');
+  if (runAsNonRoot) tokens.splice(tokens.indexOf('--run-as-non-root'), 1);
+  const dropCaps = extractFlagValue(tokens, '--drop-capabilities=');
+  const readOnlyRoot = tokens.includes('--read-only-root');
+  if (readOnlyRoot) tokens.splice(tokens.indexOf('--read-only-root'), 1);
+
+  const meta: Record<string, unknown> = { image, status: 'Running' };
+  if (livenessProbe) meta.livenessProbe = livenessProbe;
+  if (readinessProbe) meta.readinessProbe = readinessProbe;
+  if (startupProbe) meta.startupProbe = startupProbe;
+  if (runAsNonRoot) meta.runAsNonRoot = true;
+  if (dropCaps) meta.dropCapabilities = dropCaps;
+  if (readOnlyRoot) meta.readOnlyRootFilesystem = true;
+
+  const pod = createResource('pod', podName, ns, labels, meta);
   return { state: { resources: [...state.resources, pod] }, result: { success: true, message: `pod/${podName} created`, resourcesCreated: [pod] } };
 }
 
@@ -112,18 +155,9 @@ function handleCreate(state: ClusterState, tokens: string[], ns: string): { stat
   const name = tokens.shift();
   if (!resourceType || !name) return { state, result: { success: false, message: 'Usage: kubectl create <type> <name>' } };
 
-  // Normalize type aliases
-  const typeMap: Record<string, string> = {
-    'pv': 'persistentvolume', 'persistentvolume': 'persistentvolume',
-    'pvc': 'persistentvolumeclaim', 'persistentvolumeclaim': 'persistentvolumeclaim',
-    'sa': 'serviceaccount', 'serviceaccount': 'serviceaccount',
-    'networkpolicy': 'networkpolicy', 'netpol': 'networkpolicy',
-    'role': 'role', 'clusterrole': 'clusterrole',
-    'rolebinding': 'rolebinding', 'clusterrolebinding': 'clusterrolebinding',
-  };
-  const normalizedType = typeMap[resourceType] || resourceType;
+  const normalizedType = normalizeType(resourceType);
 
-  const clusterScoped = ['namespace', 'persistentvolume', 'clusterrole', 'clusterrolebinding', 'node'].includes(normalizedType);
+  const clusterScoped = CLUSTER_SCOPED.includes(normalizedType);
   const existing = state.resources.find(r => r.type === normalizedType && r.name === name && (r.namespace === ns || clusterScoped));
   if (existing) return { state, result: { success: false, message: `Error: ${resourceType} "${name}" already exists` } };
 
@@ -267,9 +301,8 @@ function handleDelete(state: ClusterState, tokens: string[], ns: string): { stat
   const name = tokens.shift();
   if (!resourceType || !name) return { state, result: { success: false, message: 'Usage: kubectl delete <type> <name>' } };
 
-  const typeMap: Record<string, string> = { pv: 'persistentvolume', pvc: 'persistentvolumeclaim', sa: 'serviceaccount', netpol: 'networkpolicy' };
-  const normalizedType = typeMap[resourceType] || resourceType;
-  const clusterScoped = ['namespace', 'persistentvolume', 'clusterrole', 'clusterrolebinding', 'node'].includes(normalizedType);
+  const normalizedType = normalizeType(resourceType);
+  const clusterScoped = CLUSTER_SCOPED.includes(normalizedType);
 
   const target = state.resources.find(r => r.type === normalizedType && r.name === name && (r.namespace === ns || clusterScoped));
   if (!target) return { state, result: { success: false, message: `Error: ${resourceType} "${name}" not found` } };
@@ -293,13 +326,12 @@ function handleGet(state: ClusterState, tokens: string[], ns: string): { state: 
   const resourceType = tokens.shift();
   if (!resourceType) return { state, result: { success: false, message: 'Usage: kubectl get <type>' } };
 
-  const typeMap: Record<string, string> = { pv: 'persistentvolume', pvs: 'persistentvolume', pvc: 'persistentvolumeclaim', pvcs: 'persistentvolumeclaim', sa: 'serviceaccount', netpol: 'networkpolicy' };
-  const normalizedType = typeMap[resourceType] || resourceType;
+  const normalizedType = normalizeType(resourceType);
 
   const allNs = tokens.includes('--all-namespaces') || tokens.includes('-A');
   const showLabels = tokens.includes('--show-labels');
   const filtered = state.resources.filter(r => {
-    if (normalizedType !== 'all' && r.type !== normalizedType && r.type !== normalizedType.replace(/s$/, '')) return false;
+    if (normalizedType !== 'all' && r.type !== normalizedType) return false;
     if (!allNs && r.namespace && r.namespace !== ns) return false;
     return true;
   });
@@ -327,7 +359,8 @@ function handleExpose(state: ClusterState, tokens: string[], ns: string): { stat
   const targetName = tokens.shift();
   if (!targetType || !targetName) return { state, result: { success: false, message: 'Usage: kubectl expose <type> <name> --port=<port>' } };
 
-  const target = state.resources.find(r => r.type === targetType && r.name === targetName && r.namespace === ns);
+  const nType = normalizeType(targetType);
+  const target = state.resources.find(r => r.type === nType && r.name === targetName && r.namespace === ns);
   if (!target) return { state, result: { success: false, message: `Error: ${targetType} "${targetName}" not found` } };
 
   const port = extractFlagValue(tokens, '--port=') || '80';
@@ -347,7 +380,8 @@ function handleScale(state: ClusterState, tokens: string[], ns: string): { state
   const target = tokens.shift();
   if (!target) return { state, result: { success: false, message: 'Usage: kubectl scale <type>/<name> --replicas=<n>' } };
 
-  const [type, name] = target.split('/');
+  const [rawType, name] = target.split('/');
+  const type = normalizeType(rawType);
   const replicaStr = extractFlagValue(tokens, '--replicas=');
   if (!replicaStr) return { state, result: { success: false, message: 'Missing --replicas flag' } };
   const replicas = parseInt(replicaStr, 10);
@@ -404,7 +438,8 @@ function handleRollout(state: ClusterState, tokens: string[], ns: string): { sta
   const target = tokens.shift();
   if (!subCmd || !target) return { state, result: { success: false, message: 'Usage: kubectl rollout <status|history|undo|restart> deployment/<name>' } };
 
-  const [type, name] = target.split('/');
+  const [rawType, name] = target.split('/');
+  const type = normalizeType(rawType);
   const dep = state.resources.find(r => r.type === type && r.name === name && r.namespace === ns);
   if (!dep) return { state, result: { success: false, message: `Error: ${type} "${name}" not found` } };
 
@@ -466,7 +501,8 @@ function handleSet(state: ClusterState, tokens: string[], ns: string): { state: 
   const imageSpec = tokens.shift();
   if (!target || !imageSpec) return { state, result: { success: false, message: 'Usage: kubectl set image deployment/<name> <container>=<image>' } };
 
-  const [type, name] = target.split('/');
+  const [rawType, name] = target.split('/');
+  const type = normalizeType(rawType);
   const [, newImage] = imageSpec.split('=');
   if (!newImage) return { state, result: { success: false, message: 'Invalid image spec. Use: container=image:tag' } };
 
@@ -498,8 +534,9 @@ function handleLabel(state: ClusterState, tokens: string[], ns: string): { state
   const name = tokens.shift();
   if (!resourceType || !name) return { state, result: { success: false, message: 'Usage: kubectl label <type> <name> key=value' } };
 
-  const clusterScoped = ['namespace', 'node', 'persistentvolume', 'clusterrole'].includes(resourceType);
-  const target = state.resources.find(r => r.type === resourceType && r.name === name && (r.namespace === ns || clusterScoped));
+  const nType = normalizeType(resourceType);
+  const isClusterScoped = CLUSTER_SCOPED.includes(nType);
+  const target = state.resources.find(r => r.type === nType && r.name === name && (r.namespace === ns || isClusterScoped));
   if (!target) return { state, result: { success: false, message: `Error: ${resourceType} "${name}" not found` } };
 
   const newLabels = { ...target.labels };
@@ -522,8 +559,9 @@ function handleDescribe(state: ClusterState, tokens: string[], ns: string): { st
   const name = tokens.shift();
   if (!resourceType || !name) return { state, result: { success: false, message: 'Usage: kubectl describe <type> <name>' } };
 
-  const clusterScoped = ['namespace', 'node', 'persistentvolume', 'clusterrole', 'clusterrolebinding'].includes(resourceType);
-  const target = state.resources.find(r => r.type === resourceType && r.name === name && (r.namespace === ns || clusterScoped));
+  const nType = normalizeType(resourceType);
+  const isClusterScoped = CLUSTER_SCOPED.includes(nType);
+  const target = state.resources.find(r => r.type === nType && r.name === name && (r.namespace === ns || isClusterScoped));
   if (!target) return { state, result: { success: false, message: `Error: ${resourceType} "${name}" not found` } };
 
   const lines = [
@@ -596,6 +634,106 @@ function handleCordon(state: ClusterState, tokens: string[], cordon: boolean): {
   const newStatus = cordon ? 'Ready,SchedulingDisabled' : 'Ready';
   const newResources = state.resources.map(r => r.id === node.id ? { ...r, metadata: { ...r.metadata, status: newStatus } } : r);
   return { state: { resources: newResources }, result: { success: true, message: `node/${nodeName} ${cordon ? 'cordoned' : 'uncordoned'}` } };
+}
+
+function handleDrain(state: ClusterState, tokens: string[]): { state: ClusterState; result: CommandResult } {
+  const nodeName = tokens.shift();
+  if (!nodeName) return { state, result: { success: false, message: 'Usage: kubectl drain <node> [--ignore-daemonsets]' } };
+
+  const node = state.resources.find(r => r.type === 'node' && r.name === nodeName);
+  if (!node) return { state, result: { success: false, message: `Error: node "${nodeName}" not found` } };
+
+  // Check for --ignore-daemonsets flag
+  const ignoreDaemonsets = tokens.includes('--ignore-daemonsets');
+
+  // Cordon the node first
+  const newResources = state.resources.map(r => {
+    if (r.id === node.id) return { ...r, metadata: { ...r.metadata, status: 'Ready,SchedulingDisabled' } };
+    return r;
+  });
+
+  // Evict non-daemonset pods on this node
+  const podsOnNode = newResources.filter(r =>
+    r.type === 'pod' && (r.metadata.nodeName === nodeName)
+  );
+  const daemonsetPods = podsOnNode.filter(r => {
+    const manager = newResources.find(m => m.id === r.metadata.managedBy);
+    return manager?.type === 'daemonset';
+  });
+  const podsToEvict = ignoreDaemonsets
+    ? podsOnNode.filter(p => !daemonsetPods.includes(p))
+    : podsOnNode;
+
+  if (!ignoreDaemonsets && daemonsetPods.length > 0) {
+    return { state, result: { success: false, message: `Cannot drain node "${nodeName}": pods managed by DaemonSet found. Use --ignore-daemonsets to proceed.` } };
+  }
+
+  const evictedIds = new Set(podsToEvict.map(p => p.id));
+  const finalResources = newResources.filter(r => !evictedIds.has(r.id));
+
+  const evictedCount = podsToEvict.length;
+  return {
+    state: { resources: finalResources },
+    result: { success: true, message: `node/${nodeName} drained (${evictedCount} pod${evictedCount !== 1 ? 's' : ''} evicted)`, resourcesDeleted: [...evictedIds] }
+  };
+}
+
+function handleTop(state: ClusterState, tokens: string[], ns: string): { state: ClusterState; result: CommandResult } {
+  const resourceType = tokens.shift();
+  if (!resourceType) return { state, result: { success: false, message: 'Usage: kubectl top <pods|nodes>' } };
+  const nType = normalizeType(resourceType);
+  const showContainers = tokens.includes('--containers');
+
+  if (nType === 'node') {
+    const nodes = state.resources.filter(r => r.type === 'node');
+    if (nodes.length === 0) return { state, result: { success: true, message: 'No nodes found.' } };
+    const header = 'NAME           CPU(cores)   CPU%   MEMORY(bytes)   MEMORY%';
+    const lines = nodes.map(n => {
+      const cpu = Math.floor(100 + Math.random() * 400);
+      const mem = Math.floor(512 + Math.random() * 1536);
+      return `${n.name.padEnd(15)}${(cpu + 'm').padEnd(13)}${(Math.floor(cpu / 20) + '%').padEnd(7)}${(mem + 'Mi').padEnd(16)}${Math.floor(mem / 40) + '%'}`;
+    });
+    return { state, result: { success: true, message: `${header}\n${lines.join('\n')}` } };
+  }
+
+  if (nType === 'pod') {
+    const pods = state.resources.filter(r => r.type === 'pod' && (r.namespace === ns || tokens.includes('-A') || tokens.includes('--all-namespaces')));
+    if (pods.length === 0) return { state, result: { success: true, message: 'No pods found.' } };
+    const header = showContainers
+      ? 'POD                     CONTAINER    CPU(cores)   MEMORY(bytes)'
+      : 'NAME                    CPU(cores)   MEMORY(bytes)';
+    const lines = pods.map(p => {
+      const cpu = Math.floor(1 + Math.random() * 50);
+      const mem = Math.floor(10 + Math.random() * 200);
+      if (showContainers) {
+        const container = (p.metadata.image as string) || 'main';
+        return `${p.name.padEnd(24)}${container.padEnd(13)}${(cpu + 'm').padEnd(13)}${mem + 'Mi'}`;
+      }
+      return `${p.name.padEnd(24)}${(cpu + 'm').padEnd(13)}${mem + 'Mi'}`;
+    });
+    return { state, result: { success: true, message: `${header}\n${lines.join('\n')}` } };
+  }
+
+  return { state, result: { success: false, message: `error: unknown resource type "${resourceType}"` } };
+}
+
+function handleLogs(state: ClusterState, tokens: string[], ns: string): { state: ClusterState; result: CommandResult } {
+  const podName = tokens.shift();
+  if (!podName) return { state, result: { success: false, message: 'Usage: kubectl logs <pod-name>' } };
+
+  const pod = state.resources.find(r => r.type === 'pod' && r.name === podName && r.namespace === ns);
+  if (!pod) return { state, result: { success: false, message: `Error: pod "${podName}" not found` } };
+
+  const image = (pod.metadata.image as string) || 'app';
+  const timestamp = new Date().toISOString();
+  const lines = [
+    `${timestamp} Starting ${image}...`,
+    `${timestamp} Listening on port 8080`,
+    `${timestamp} Ready to accept connections`,
+    `${timestamp} GET / 200 OK (2ms)`,
+    `${timestamp} Health check passed`,
+  ];
+  return { state, result: { success: true, message: lines.join('\n') } };
 }
 
 function getHelpText(): string {

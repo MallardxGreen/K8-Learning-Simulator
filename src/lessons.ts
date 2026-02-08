@@ -1232,11 +1232,32 @@ kubectl label namespace production \\
 <div class="info-box">
   <strong>💡 KCNA Tip:</strong> Pod Security Admission (PSA) replaced PodSecurityPolicy (PSP) in K8s 1.25. Know the three levels: Privileged, Baseline, Restricted. Liveness probes restart containers; readiness probes control Service traffic. Always use <code>runAsNonRoot: true</code> and drop all capabilities in production.
 </div>
+
+<h3>🧪 Commands to Try</h3>
+<pre><code># Create a pod with security context
+kubectl run web-secure --image=nginx --run-as-non-root
+kubectl run hardened --image=nginx --drop-capabilities=ALL
+
+# Create pods with health probes
+kubectl run health-app --image=nginx --liveness-probe=httpGet:8080
+kubectl run ready-app --image=nginx --readiness-probe=tcpSocket:3000
+kubectl run slow-app --image=nginx --startup-probe=httpGet:8080
+
+# Inspect pod details
+kubectl describe pod web-secure
+kubectl get pods</code></pre>
 `,
-    example: 'kubectl get pods',
-    expectedCommands: [],
-    hint: 'This is a theory lesson — review the probe types and security contexts above.',
-    challenges: [],
+    example: 'kubectl run probe-test --image=nginx --liveness-probe=httpGet:8080',
+    expectedCommands: ['kubectl run', 'kubectl get pods', 'kubectl describe pod'],
+    hint: 'Use --liveness-probe, --readiness-probe, --startup-probe, --run-as-non-root, and --drop-capabilities flags.',
+    challenges: [
+      { id: 'sec-1', task: 'Create a pod "web-secure" with runAsNonRoot security context', hint: 'kubectl run web-secure --image=nginx --run-as-non-root', answer: 'kubectl run web-secure --image=nginx --run-as-non-root', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'web-secure' && r.metadata.runAsNonRoot === true) },
+      { id: 'sec-2', task: 'Create a pod "hardened-app" that drops ALL capabilities', hint: 'kubectl run hardened-app --image=nginx --drop-capabilities=ALL', answer: 'kubectl run hardened-app --image=nginx --drop-capabilities=ALL', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'hardened-app' && r.metadata.dropCapabilities === 'ALL') },
+      { id: 'sec-3', task: 'Create a pod "readonly-pod" with a read-only root filesystem', hint: 'kubectl run readonly-pod --image=nginx --read-only-root', answer: 'kubectl run readonly-pod --image=nginx --read-only-root', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'readonly-pod' && r.metadata.readOnlyRootFilesystem === true) },
+      { id: 'sec-4', task: 'Create a pod "health-check" with an HTTP liveness probe on port 8080', hint: 'kubectl run health-check --image=nginx --liveness-probe=httpGet:8080', answer: 'kubectl run health-check --image=nginx --liveness-probe=httpGet:8080', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'health-check' && typeof r.metadata.livenessProbe === 'string') },
+      { id: 'sec-5', task: 'Create a pod "ready-app" with a TCP readiness probe on port 3000', hint: 'kubectl run ready-app --image=nginx --readiness-probe=tcpSocket:3000', answer: 'kubectl run ready-app --image=nginx --readiness-probe=tcpSocket:3000', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'ready-app' && typeof r.metadata.readinessProbe === 'string') },
+      { id: 'sec-6', task: 'Create a pod "slow-start" with a startup probe', hint: 'kubectl run slow-start --image=nginx --startup-probe=httpGet:8080', answer: 'kubectl run slow-start --image=nginx --startup-probe=httpGet:8080', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'slow-start' && typeof r.metadata.startupProbe === 'string') },
+    ],
   },
   // ── HELM ──
   {
@@ -1494,9 +1515,16 @@ kubectl get events --sort-by='.lastTimestamp'</code></pre>
 </div>
 `,
     example: 'kubectl top pods',
-    expectedCommands: [],
-    hint: 'This is a theory lesson — review the three pillars of observability and key tools.',
-    challenges: [],
+    expectedCommands: ['kubectl top pods', 'kubectl top nodes', 'kubectl logs'],
+    hint: 'Use kubectl top, kubectl logs, and create pods to monitor.',
+    challenges: [
+      { id: 'obs-1', task: 'Run "kubectl top nodes" to view node resource usage', hint: 'kubectl top nodes', answer: 'kubectl top nodes', validate: (c) => c.resources.some(r => r.type === 'node') },
+      { id: 'obs-2', task: 'Create a pod called "metrics-app" to monitor', hint: 'kubectl run metrics-app --image=prom/prometheus', answer: 'kubectl run metrics-app --image=prom/prometheus', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'metrics-app') },
+      { id: 'obs-3', task: 'Create a pod called "log-generator" for log inspection', hint: 'kubectl run log-generator --image=busybox', answer: 'kubectl run log-generator --image=busybox', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'log-generator') },
+      { id: 'obs-4', task: 'Create a pod called "trace-collector" running a Jaeger image', hint: 'kubectl run trace-collector --image=jaegertracing/all-in-one', answer: 'kubectl run trace-collector --image=jaegertracing/all-in-one', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'trace-collector') },
+      { id: 'obs-5', task: 'Create a deployment called "monitored-app" with 3 replicas', hint: 'kubectl create deployment monitored-app --image=nginx --replicas=3', answer: 'kubectl create deployment monitored-app --image=nginx --replicas=3', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'monitored-app') },
+      { id: 'obs-6', task: 'Expose "monitored-app" as a service on port 9090', hint: 'kubectl expose deployment monitored-app --port=9090', answer: 'kubectl expose deployment monitored-app --port=9090', validate: (c) => c.resources.some(r => r.type === 'service' && r.name === 'monitored-app' && r.metadata.port === '9090') },
+    ],
   },
   // ── CLOUD NATIVE CONCEPTS ──
   {
