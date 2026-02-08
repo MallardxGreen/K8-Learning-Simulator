@@ -756,16 +756,22 @@ kubectl drain node1 --ignore-daemonsets</code></pre>
 
 <h3>🧪 Commands to Try</h3>
 <pre><code># Taint a node
-kubectl taint nodes node1 env=prod:NoSchedule
+kubectl taint nodes node-1 env=prod:NoSchedule
 
 # Cordon a node
-kubectl cordon node1
+kubectl cordon node-1
 
 # Uncordon it
-kubectl uncordon node1
+kubectl uncordon node-1
+
+# Drain a node
+kubectl drain node-2 --ignore-daemonsets
 
 # Label a node
-kubectl label nodes node1 disktype=ssd</code></pre>
+kubectl label nodes node-2 disktype=ssd
+
+# Taint another node
+kubectl taint nodes node-2 gpu=true:NoSchedule</code></pre>
 `,
     example: 'kubectl taint nodes node1 env=prod:NoSchedule',
     expectedCommands: ['kubectl taint', 'kubectl cordon', 'kubectl uncordon', 'kubectl label'],
@@ -774,9 +780,9 @@ kubectl label nodes node1 disktype=ssd</code></pre>
       { id: 'sched-1', task: 'Taint node-1 with env=prod:NoSchedule', hint: 'kubectl taint nodes node-1 env=prod:NoSchedule', answer: 'kubectl taint nodes node-1 env=prod:NoSchedule', validate: (c) => c.resources.some(r => r.type === 'node' && r.name === 'node-1' && Array.isArray(r.metadata.taints) && (r.metadata.taints as string[]).some(t => t.startsWith('env='))) },
       { id: 'sched-2', task: 'Label node-2 with disktype=ssd for nodeSelector targeting', hint: 'kubectl label nodes node-2 disktype=ssd', answer: 'kubectl label nodes node-2 disktype=ssd', validate: (c) => c.resources.some(r => r.type === 'node' && r.name === 'node-2' && r.labels.disktype === 'ssd') },
       { id: 'sched-3', task: 'Cordon node-1 to prevent new scheduling', hint: 'kubectl cordon node-1', answer: 'kubectl cordon node-1', validate: (c) => c.resources.some(r => r.type === 'node' && r.name === 'node-1' && r.metadata.status === 'Ready,SchedulingDisabled') },
-      { id: 'sched-4', task: 'Drain node-1 to evict all pods (with --ignore-daemonsets)', hint: 'kubectl drain node-1 --ignore-daemonsets', answer: 'kubectl drain node-1 --ignore-daemonsets', validate: (c) => c.resources.some(r => r.type === 'node' && r.name === 'node-1' && r.metadata.status === 'Ready,SchedulingDisabled') },
-      { id: 'sched-5', task: 'Uncordon node-1 to allow scheduling again', hint: 'kubectl uncordon node-1', answer: 'kubectl uncordon node-1', validate: (c) => c.resources.some(r => r.type === 'node' && r.name === 'node-1' && r.metadata.status === 'Ready') },
-      { id: 'sched-6', task: 'Remove the taint from node-1 (env=prod:NoSchedule-)', hint: 'kubectl taint nodes node-1 env=prod:NoSchedule-', answer: 'kubectl taint nodes node-1 env=prod:NoSchedule-', validate: (c) => { const n = c.resources.find(r => r.type === 'node' && r.name === 'node-1'); const taints = (n?.metadata.taints as string[]) || []; return !taints.some(t => t.startsWith('env=')); } },
+      { id: 'sched-4', task: 'Drain node-2 to evict all pods (with --ignore-daemonsets)', hint: 'kubectl drain node-2 --ignore-daemonsets', answer: 'kubectl drain node-2 --ignore-daemonsets', validate: (c) => c.resources.some(r => r.type === 'node' && r.name === 'node-2' && r.metadata.status === 'Ready,SchedulingDisabled') },
+      { id: 'sched-5', task: 'Uncordon node-2 after drain to allow scheduling again', hint: 'kubectl uncordon node-2', answer: 'kubectl uncordon node-2', validate: (c) => { const n1 = c.resources.find(r => r.type === 'node' && r.name === 'node-1'); const n2 = c.resources.find(r => r.type === 'node' && r.name === 'node-2'); return n1?.metadata.status === 'Ready,SchedulingDisabled' && n2?.labels?.disktype === 'ssd' && n2?.metadata.status === 'Ready'; } },
+      { id: 'sched-6', task: 'Taint node-2 with gpu=true:NoSchedule', hint: 'kubectl taint nodes node-2 gpu=true:NoSchedule', answer: 'kubectl taint nodes node-2 gpu=true:NoSchedule', validate: (c) => c.resources.some(r => r.type === 'node' && r.name === 'node-2' && Array.isArray(r.metadata.taints) && (r.metadata.taints as string[]).some(t => t.startsWith('gpu='))) },
       { id: 'sched-7', task: 'Label node-1 with tier=backend for workload targeting', hint: 'kubectl label nodes node-1 tier=backend', answer: 'kubectl label nodes node-1 tier=backend', validate: (c) => c.resources.some(r => r.type === 'node' && r.name === 'node-1' && r.labels.tier === 'backend') },
     ],
   },
@@ -1145,7 +1151,7 @@ kubectl auth can-i delete nodes</code></pre>
       { id: 'rbac-3', task: 'Create a RoleBinding called "read-pods" binding the pod-reader role', hint: 'kubectl create rolebinding read-pods --role=pod-reader --serviceaccount=default:app-sa', answer: 'kubectl create rolebinding read-pods --role=pod-reader --serviceaccount=default:app-sa', validate: (c) => c.resources.some(r => r.type === 'rolebinding' && r.name === 'read-pods') },
       { id: 'rbac-4', task: 'Create a ClusterRole called "node-viewer" for viewing nodes', hint: 'kubectl create clusterrole node-viewer --verb=get,list --resource=nodes', answer: 'kubectl create clusterrole node-viewer --verb=get,list --resource=nodes', validate: (c) => c.resources.some(r => r.type === 'clusterrole' && r.name === 'node-viewer') },
       { id: 'rbac-5', task: 'Create a ClusterRoleBinding called "view-nodes" binding node-viewer', hint: 'kubectl create clusterrolebinding view-nodes --clusterrole=node-viewer --serviceaccount=default:app-sa', answer: 'kubectl create clusterrolebinding view-nodes --clusterrole=node-viewer --serviceaccount=default:app-sa', validate: (c) => c.resources.some(r => r.type === 'clusterrolebinding' && r.name === 'view-nodes') },
-      { id: 'rbac-6', task: 'Create a ClusterRoleBinding called "view-nodes" binding node-viewer', hint: 'kubectl create clusterrolebinding view-nodes --clusterrole=node-viewer --serviceaccount=default:app-sa', answer: 'kubectl create clusterrolebinding view-nodes --clusterrole=node-viewer --serviceaccount=default:app-sa', validate: (c) => c.resources.some(r => r.type === 'clusterrolebinding' && r.name === 'view-nodes') },
+      { id: 'rbac-6', task: 'Create a ServiceAccount called "deploy-bot"', hint: 'kubectl create sa deploy-bot', answer: 'kubectl create sa deploy-bot', validate: (c) => c.resources.some(r => r.type === 'serviceaccount' && r.name === 'deploy-bot') },
     ],
   },
   // ── POD SECURITY & PROBES ──
@@ -2317,7 +2323,9 @@ kubectl create secret tls-cert</code></pre>
   <li>Deploy some workloads first (so there's something running)</li>
   <li>Cordon node-1 to prevent new pods from scheduling</li>
   <li>Taint node-1 to repel pods</li>
-  <li>After "maintenance", uncordon node-1</li>
+  <li>Remove the taint after "maintenance"</li>
+  <li>Label node-1 to mark maintenance complete</li>
+  <li>Uncordon node-1 to bring it back</li>
   <li>Label node-2 for specific workload targeting</li>
 </ol>
 
@@ -2325,6 +2333,8 @@ kubectl create secret tls-cert</code></pre>
 <pre><code>kubectl create deployment web --image=nginx --replicas=4
 kubectl cordon node-1
 kubectl taint nodes node-1 maintenance=true:NoSchedule
+kubectl taint nodes node-1 maintenance=true:NoSchedule-
+kubectl label nodes node-1 maintained=true
 kubectl uncordon node-1
 kubectl label nodes node-2 tier=frontend</code></pre>
 `,
@@ -2335,8 +2345,10 @@ kubectl label nodes node-2 tier=frontend</code></pre>
       { id: 'lab14-1', task: 'Create deployment "web" with 4 replicas', hint: 'kubectl create deployment web --image=nginx --replicas=4', answer: 'kubectl create deployment web --image=nginx --replicas=4', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'web' && r.metadata.replicas === 4) },
       { id: 'lab14-2', task: 'Cordon node-1 to prevent scheduling', hint: 'kubectl cordon node-1', answer: 'kubectl cordon node-1', validate: (c) => c.resources.some(r => r.type === 'node' && r.name === 'node-1' && r.metadata.status === 'Ready,SchedulingDisabled') },
       { id: 'lab14-3', task: 'Taint node-1 with maintenance=true:NoSchedule', hint: 'kubectl taint nodes node-1 maintenance=true:NoSchedule', answer: 'kubectl taint nodes node-1 maintenance=true:NoSchedule', validate: (c) => c.resources.some(r => r.type === 'node' && r.name === 'node-1' && Array.isArray(r.metadata.taints) && (r.metadata.taints as string[]).length > 0) },
-      { id: 'lab14-4', task: 'Uncordon node-1 after maintenance', hint: 'kubectl uncordon node-1', answer: 'kubectl uncordon node-1', validate: (c) => c.resources.some(r => r.type === 'node' && r.name === 'node-1' && r.metadata.status === 'Ready') },
-      { id: 'lab14-5', task: 'Label node-2 with tier=frontend', hint: 'kubectl label nodes node-2 tier=frontend', answer: 'kubectl label nodes node-2 tier=frontend', validate: (c) => c.resources.some(r => r.type === 'node' && r.name === 'node-2' && r.labels.tier === 'frontend') },
+      { id: 'lab14-4', task: 'Remove the maintenance taint from node-1', hint: 'kubectl taint nodes node-1 maintenance=true:NoSchedule-', answer: 'kubectl taint nodes node-1 maintenance=true:NoSchedule-', validate: (c) => { const n = c.resources.find(r => r.type === 'node' && r.name === 'node-1'); const taints = (n?.metadata.taints as string[]) || []; return n?.metadata.status === 'Ready,SchedulingDisabled' && !taints.some(t => t.startsWith('maintenance=')); } },
+      { id: 'lab14-5', task: 'Label node-1 with maintained=true to mark maintenance complete', hint: 'kubectl label nodes node-1 maintained=true', answer: 'kubectl label nodes node-1 maintained=true', validate: (c) => c.resources.some(r => r.type === 'node' && r.name === 'node-1' && r.labels.maintained === 'true') },
+      { id: 'lab14-6', task: 'Uncordon node-1 to bring it back into rotation', hint: 'kubectl uncordon node-1', answer: 'kubectl uncordon node-1', validate: (c) => { const n = c.resources.find(r => r.type === 'node' && r.name === 'node-1'); return n !== undefined && n.metadata.status === 'Ready' && n.labels.maintained === 'true'; } },
+      { id: 'lab14-7', task: 'Label node-2 with tier=frontend', hint: 'kubectl label nodes node-2 tier=frontend', answer: 'kubectl label nodes node-2 tier=frontend', validate: (c) => c.resources.some(r => r.type === 'node' && r.name === 'node-2' && r.labels.tier === 'frontend') },
     ],
   },
 ];
