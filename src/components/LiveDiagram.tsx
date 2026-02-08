@@ -6,8 +6,6 @@ interface LiveDiagramProps {
 }
 
 const RESOURCE_STYLE: Record<string, { emoji: string; bg: string; border: string; text: string }> = {
-  namespace:  { emoji: '📁', bg: '#1e1b4b', border: '#6366f1', text: '#a78bfa' },
-  node:       { emoji: '🖥️', bg: '#0c4a6e', border: '#0284c7', text: '#7dd3fc' },
   pod:        { emoji: '🐳', bg: '#1e3a5f', border: '#3b82f6', text: '#93c5fd' },
   deployment: { emoji: '🚀', bg: '#064e3b', border: '#10b981', text: '#6ee7b7' },
   replicaset: { emoji: '📋', bg: '#134e4a', border: '#14b8a6', text: '#5eead4' },
@@ -19,7 +17,7 @@ const RESOURCE_STYLE: Record<string, { emoji: string; bg: string; border: string
   configmap:  { emoji: '⚙️', bg: '#334155', border: '#64748b', text: '#cbd5e1' },
   secret:     { emoji: '🔒', bg: '#7f1d1d', border: '#ef4444', text: '#fca5a5' },
   ingress:    { emoji: '🔀', bg: '#4c1d95', border: '#7c3aed', text: '#c4b5fd' },
-  persistentvolume: { emoji: '💾', bg: '#1e3a5f', border: '#2563eb', text: '#93c5fd' },
+  persistentvolume:      { emoji: '💾', bg: '#1e3a5f', border: '#2563eb', text: '#93c5fd' },
   persistentvolumeclaim: { emoji: '📎', bg: '#1e3a5f', border: '#3b82f6', text: '#93c5fd' },
   serviceaccount: { emoji: '👤', bg: '#334155', border: '#94a3b8', text: '#e2e8f0' },
   role:       { emoji: '🛡️', bg: '#4c1d95', border: '#8b5cf6', text: '#c4b5fd' },
@@ -29,179 +27,160 @@ const RESOURCE_STYLE: Record<string, { emoji: string; bg: string; border: string
   networkpolicy: { emoji: '🔥', bg: '#7f1d1d', border: '#dc2626', text: '#fca5a5' },
 };
 
-const SYSTEM_NAMES = new Set(['default', 'kube-system', 'node-1', 'node-2']);
-const NODE_W = 150;
-const NODE_H = 60;
-const GAP_X = 30;
-const GAP_Y = 50;
-const TREE_GAP = 60; // gap between separate deployment trees
-const SECTION_GAP = 50; // gap between sections (trees vs standalone)
-const PAD = 40;
+const NODE_W = 140;
+const NODE_H = 50;
+const GAP = 16;
+const NS_PAD = 16;
+const COLS_PER_NS = 3;
+
+// Cluster-scoped resource types (not inside a namespace)
+const CLUSTER_SCOPED = new Set(['namespace', 'node', 'persistentvolume', 'clusterrole', 'clusterrolebinding']);
 
 export default function LiveDiagram({ cluster }: LiveDiagramProps) {
-  const [zoom, setZoom] = useState(0.85);
+  const [zoom, setZoom] = useState(0.75);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const isPanning = useRef(false);
   const lastMouse = useRef({ x: 0, y: 0 });
-  const containerRef = useRef<HTMLDivElement>(null);
 
-  const systemRes = cluster.resources.filter(r =>
-    SYSTEM_NAMES.has(r.name) && (r.type === 'namespace' || r.type === 'node')
-  );
-  const userRes = cluster.resources.filter(r => !systemRes.includes(r));
+  // Separate resources
+  const nodes = cluster.resources.filter(r => r.type === 'node');
+  const namespaces = cluster.resources.filter(r => r.type === 'namespace');
+  const clusterScoped = cluster.resources.filter(r => CLUSTER_SCOPED.has(r.type) && r.type !== 'node' && r.type !== 'namespace');
+  const namespacedRes = cluster.resources.filter(r => !CLUSTER_SCOPED.has(r.type));
 
-  // Build parent→children map
-  const childrenOf = useMemo(() => {
-    const map = new Map<string, K8sResource[]>();
-    for (const r of userRes) {
-      const parentId = (r.metadata.managedBy as string) || (r.metadata.targetRef as string);
-      if (parentId) {
-        if (!map.has(parentId)) map.set(parentId, []);
-        map.get(parentId)!.push(r);
-      }
+  // Group namespaced resources by namespace
+  const byNamespace = useMemo(() => {
+    const map: Record<string, K8sResource[]> = {};
+    for (const ns of namespaces) {
+      map[ns.name] = [];
+    }
+    for (const r of namespacedRes) {
+      const ns = r.namespace || 'default';
+      if (!map[ns]) map[ns] = [];
+      map[ns].push(r);
     }
     return map;
-  }, [userRes]);
+  }, [namespaces, namespacedRes]);
 
-  // Find root resources (no parent)
-  const managedIds = useMemo(() => {
-    const set = new Set<string>();
-    for (const r of userRes) {
-      const parentId = (r.metadata.managedBy as string) || (r.metadata.targetRef as string);
-      if (parentId) set.add(r.id);
-    }
-    return set;
-  }, [userRes]);
+  // Only show namespaces that have user resources (or are non-system)
+  const visibleNamespaces = useMemo(() => {
+    return Object.entries(byNamespace)
+      .filter(([name, res]) => res.length > 0 || (name !== 'kube-system'))
+      .sort(([a], [b]) => {
+        if (a === 'default') return -1;
+        if (b === 'default') return 1;
+        return a.localeCompare(b);
+      });
+  }, [byNamespace]);
 
-  const roots = useMemo(() => userRes.filter(r => !managedIds.has(r.id)), [userRes, managedIds]);
+  const userResourceCount = namespacedRes.length + clusterScoped.length;
 
-  // Separate into trees (resources with children) and standalone
-  const treeRoots = roots.filter(r => childrenOf.has(r.id));
-  const standalone = roots.filter(r => !childrenOf.has(r.id));
+  // Layout computation
+  const layout = useMemo(() => {
+    const CONTROL_PLANE_H = 70;
+    const CONTROL_PLANE_W = 500;
+    const CLUSTER_PAD = 20;
+    const NODE_BOX_PAD = 16;
 
-  // Layout: position each tree, then standalone resources
-  const positions = useMemo(() => {
-    const pos = new Map<string, { x: number; y: number }>();
+    let totalW = 0;
+    let totalH = 0;
 
-    // Layout a tree rooted at `res` starting at (startX, startY)
-    // Returns the width consumed
-    function layoutTree(res: K8sResource, startX: number, startY: number): number {
-      const children = childrenOf.get(res.id) || [];
-      if (children.length === 0) {
-        pos.set(res.id, { x: startX, y: startY });
-        return NODE_W;
+    // Control plane at top
+    const cpX = CLUSTER_PAD;
+    const cpY = CLUSTER_PAD;
+    totalW = Math.max(totalW, cpX + CONTROL_PLANE_W + CLUSTER_PAD);
+    totalH = cpY + CONTROL_PLANE_H + 20;
+
+    // Worker nodes side by side below control plane
+    const nodesStartY = totalH;
+    const nodeLayouts: { name: string; x: number; y: number; w: number; h: number; taints: string[]; status: string }[] = [];
+
+    // Calculate namespace boxes for each node (we distribute namespaces across nodes)
+    // For simplicity: all namespaces go inside a "worker nodes" area
+    // Each namespace is a box containing its resources in a grid
+
+    const nsLayouts: { name: string; x: number; y: number; w: number; h: number; resources: K8sResource[] }[] = [];
+
+    let nsX = CLUSTER_PAD + NODE_BOX_PAD + 12;
+    let nsY = nodesStartY + 50; // leave room for node header
+    let maxNsRowH = 0;
+    const maxRowW = 800;
+
+    for (const [nsName, nsRes] of visibleNamespaces) {
+      const rows = Math.ceil(nsRes.length / COLS_PER_NS) || 1;
+      const nsW = COLS_PER_NS * (NODE_W + GAP) + NS_PAD * 2 - GAP;
+      const nsH = NS_PAD * 2 + 24 + rows * (NODE_H + GAP) - GAP;
+
+      if (nsX + nsW > maxRowW) {
+        nsX = CLUSTER_PAD + NODE_BOX_PAD + 12;
+        nsY += maxNsRowH + GAP;
+        maxNsRowH = 0;
       }
 
-      // Layout children first to know total width
-      let childX = startX;
-      const childWidths: number[] = [];
-      for (const child of children) {
-        const w = layoutTree(child, childX, startY + NODE_H + GAP_Y);
-        childWidths.push(w);
-        childX += w + GAP_X;
-      }
-      const totalChildWidth = childX - GAP_X - startX;
-
-      // Center parent above children
-      const parentX = startX + Math.max(0, (totalChildWidth - NODE_W) / 2);
-      pos.set(res.id, { x: parentX, y: startY });
-
-      return Math.max(NODE_W, totalChildWidth);
+      nsLayouts.push({ name: nsName, x: nsX, y: nsY, w: nsW, h: nsH, resources: nsRes });
+      maxNsRowH = Math.max(maxNsRowH, nsH);
+      nsX += nsW + GAP;
+      totalW = Math.max(totalW, nsX + CLUSTER_PAD);
     }
 
-    let cursorX = PAD;
-    const treeStartY = PAD;
+    const nsEndY = nsY + maxNsRowH + NODE_BOX_PAD;
 
-    // Layout each tree root
-    for (let i = 0; i < treeRoots.length; i++) {
-      const w = layoutTree(treeRoots[i], cursorX, treeStartY);
-      cursorX += w + TREE_GAP;
-    }
-
-    // Find max Y used by trees
-    let maxTreeY = treeStartY;
-    for (const [, p] of pos) {
-      maxTreeY = Math.max(maxTreeY, p.y + NODE_H);
-    }
-
-    // Layout standalone resources in a row below trees (or at top if no trees)
-    const standaloneY = treeRoots.length > 0 ? maxTreeY + SECTION_GAP : PAD;
-
-    // Group standalone by type for visual clarity
-    const standaloneByType: Record<string, K8sResource[]> = {};
-    for (const r of standalone) {
-      if (!standaloneByType[r.type]) standaloneByType[r.type] = [];
-      standaloneByType[r.type].push(r);
-    }
-
-    const typeOrder = ['namespace', 'ingress', 'service', 'configmap', 'secret', 'pod'];
-    const orderedTypes = typeOrder.filter(t => standaloneByType[t]);
-    // Add any types not in the order
-    for (const t of Object.keys(standaloneByType)) {
-      if (!orderedTypes.includes(t)) orderedTypes.push(t);
-    }
-
-    let sX = PAD;
-    let sY = standaloneY;
-    const maxPerRow = 5;
-
-    for (const type of orderedTypes) {
-      const items = standaloneByType[type];
-      for (let i = 0; i < items.length; i++) {
-        if (i > 0 && i % maxPerRow === 0) {
-          sX = PAD;
-          sY += NODE_H + GAP_Y;
-        }
-        pos.set(items[i].id, { x: sX, y: sY });
-        sX += NODE_W + GAP_X;
-      }
-      // New row for next type
-      sX = PAD;
-      sY += NODE_H + GAP_Y;
-    }
-
-    return pos;
-  }, [userRes, childrenOf, treeRoots, standalone]);
-
-  // Compute SVG bounds
-  let svgW = 400;
-  let svgH = 200;
-  for (const [, p] of positions) {
-    svgW = Math.max(svgW, p.x + NODE_W + PAD);
-    svgH = Math.max(svgH, p.y + NODE_H + PAD);
-  }
-
-  // Build arrows
-  const arrows = useMemo(() => {
-    const result: { fromX: number; fromY: number; toX: number; toY: number; color: string }[] = [];
-    for (const r of userRes) {
-      const parentId = (r.metadata.managedBy as string) || (r.metadata.targetRef as string);
-      if (!parentId) continue;
-      const childPos = positions.get(r.id);
-      const parentPos = positions.get(parentId);
-      if (!childPos || !parentPos) continue;
-      const parentRes = userRes.find(p => p.id === parentId);
-      const style = RESOURCE_STYLE[parentRes?.type || 'pod'];
-      result.push({
-        fromX: parentPos.x + NODE_W / 2,
-        fromY: parentPos.y + NODE_H,
-        toX: childPos.x + NODE_W / 2,
-        toY: childPos.y,
-        color: style?.border || '#475569',
+    // Worker node boxes encompass the namespace area
+    const nodeAreaW = Math.max(totalW - CLUSTER_PAD * 2, CONTROL_PLANE_W);
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      const nW = (nodeAreaW - GAP * (nodes.length - 1)) / nodes.length;
+      const nX = CLUSTER_PAD + i * (nW + GAP);
+      const nH = nsEndY - nodesStartY + 10;
+      const taints = Array.isArray(n.metadata.taints) ? (n.metadata.taints as string[]) : [];
+      nodeLayouts.push({
+        name: n.name,
+        x: nX,
+        y: nodesStartY,
+        w: nW,
+        h: nH,
+        taints,
+        status: (n.metadata.status as string) || 'Ready',
       });
     }
-    return result;
-  }, [userRes, positions]);
+
+    totalW = Math.max(totalW, CLUSTER_PAD * 2 + nodeAreaW);
+    totalH = nsEndY + 20;
+
+    // Cluster-scoped resources below nodes
+    let csY = totalH;
+    const csLayouts: { resource: K8sResource; x: number; y: number }[] = [];
+    if (clusterScoped.length > 0) {
+      let csX = CLUSTER_PAD;
+      for (const r of clusterScoped) {
+        if (csX + NODE_W > totalW - CLUSTER_PAD) {
+          csX = CLUSTER_PAD;
+          csY += NODE_H + GAP;
+        }
+        csLayouts.push({ resource: r, x: csX, y: csY });
+        csX += NODE_W + GAP;
+      }
+      totalH = csY + NODE_H + CLUSTER_PAD;
+    }
+
+    return {
+      totalW: Math.max(totalW, 560),
+      totalH: Math.max(totalH, 300),
+      cpX, cpY, CONTROL_PLANE_W, CONTROL_PLANE_H,
+      nodeLayouts,
+      nsLayouts,
+      csLayouts,
+    };
+  }, [nodes, visibleNamespaces, clusterScoped]);
 
   // Zoom/pan handlers
   const zoomIn = useCallback(() => setZoom(z => Math.min(3, z + 0.15)), []);
-  const zoomOut = useCallback(() => setZoom(z => Math.max(0.2, z - 0.15)), []);
-  const resetView = useCallback(() => { setZoom(0.85); setPan({ x: 0, y: 0 }); }, []);
+  const zoomOut = useCallback(() => setZoom(z => Math.max(0.15, z - 0.15)), []);
+  const resetView = useCallback(() => { setZoom(0.75); setPan({ x: 0, y: 0 }); }, []);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
-    const delta = e.deltaY > 0 ? -0.08 : 0.08;
-    setZoom(z => Math.min(3, Math.max(0.2, z + delta)));
+    setZoom(z => Math.min(3, Math.max(0.15, z + (e.deltaY > 0 ? -0.08 : 0.08))));
   }, []);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -213,110 +192,135 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
       if (!isPanning.current) return;
-      const dx = e.clientX - lastMouse.current.x;
-      const dy = e.clientY - lastMouse.current.y;
+      setPan(p => ({ x: p.x + e.clientX - lastMouse.current.x, y: p.y + e.clientY - lastMouse.current.y }));
       lastMouse.current = { x: e.clientX, y: e.clientY };
-      setPan(p => ({ x: p.x + dx, y: p.y + dy }));
     };
     const onUp = () => { isPanning.current = false; };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
-    return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
   }, []);
+
+  // Helper to render a resource card
+  function renderResource(r: K8sResource, x: number, y: number) {
+    const style = RESOURCE_STYLE[r.type] || RESOURCE_STYLE.pod;
+    const displayName = r.name.length > 14 ? r.name.slice(0, 13) + '…' : r.name;
+    const status = r.metadata.status as string | undefined;
+    return (
+      <g key={r.id}>
+        <rect x={x} y={y} width={NODE_W} height={NODE_H} rx={8} fill={style.bg} stroke={style.border} strokeWidth={1.5} />
+        <text x={x + 12} y={y + 20} fontSize={14}>{style.emoji}</text>
+        <text x={x + 32} y={y + 20} fill={style.text} fontSize={10} fontWeight={600} fontFamily="system-ui">{displayName}</text>
+        <text x={x + 12} y={y + 38} fill="#64748b" fontSize={8} fontFamily="system-ui">{r.type}</text>
+        {status && (
+          <text x={x + NODE_W - 10} y={y + 38} fill={status === 'Running' ? '#10b981' : status.includes('Disabled') ? '#ef4444' : '#f59e0b'} fontSize={8} textAnchor="end" fontFamily="system-ui">● {status}</text>
+        )}
+      </g>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col bg-gray-950 border-l border-gray-800 overflow-hidden">
+      {/* Header */}
       <div className="flex items-center justify-between px-3 py-1.5 bg-gray-900 border-b border-gray-800 flex-shrink-0">
         <div className="flex items-center gap-2">
-          <span className="text-xs">📐</span>
-          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Live Cluster</span>
-          <span className="text-xs text-gray-600">{userRes.length} resource{userRes.length !== 1 ? 's' : ''}</span>
+          <span className="text-xs">☸️</span>
+          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Cluster View</span>
+          <span className="text-xs text-gray-600">{userResourceCount} resource{userResourceCount !== 1 ? 's' : ''}</span>
         </div>
         <div className="flex items-center gap-1">
-          <button onClick={zoomOut} className="w-6 h-6 flex items-center justify-center text-xs text-gray-400 bg-gray-800 rounded hover:bg-gray-700 transition-colors" title="Zoom out">−</button>
+          <button onClick={zoomOut} className="w-6 h-6 flex items-center justify-center text-xs text-gray-400 bg-gray-800 rounded hover:bg-gray-700">−</button>
           <span className="text-xs text-gray-500 w-10 text-center">{Math.round(zoom * 100)}%</span>
-          <button onClick={zoomIn} className="w-6 h-6 flex items-center justify-center text-xs text-gray-400 bg-gray-800 rounded hover:bg-gray-700 transition-colors" title="Zoom in">+</button>
-          <button onClick={resetView} className="ml-1 px-2 h-6 flex items-center justify-center text-xs text-gray-400 bg-gray-800 rounded hover:bg-gray-700 transition-colors" title="Reset view">⟲</button>
+          <button onClick={zoomIn} className="w-6 h-6 flex items-center justify-center text-xs text-gray-400 bg-gray-800 rounded hover:bg-gray-700">+</button>
+          <button onClick={resetView} className="ml-1 px-2 h-6 flex items-center justify-center text-xs text-gray-400 bg-gray-800 rounded hover:bg-gray-700">⟲</button>
         </div>
       </div>
 
+      {/* SVG Canvas */}
       <div
-        ref={containerRef}
         className="flex-1 overflow-hidden cursor-grab active:cursor-grabbing"
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
       >
-        {userRes.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-gray-600">
-            <span className="text-4xl mb-3">☸️</span>
-            <p className="text-sm">Your cluster is empty</p>
-            <p className="text-xs mt-1">Run a kubectl command to see resources here</p>
-          </div>
-        ) : (
-          <svg width="100%" height="100%" style={{ overflow: 'visible' }}>
-            <defs>
-              <marker id="live-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-                <polygon points="0 0, 8 3, 0 6" fill="#475569" />
-              </marker>
-            </defs>
-            <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
-              {/* Grid dots */}
-              {Array.from({ length: Math.ceil(svgW / 40) }).map((_, xi) =>
-                Array.from({ length: Math.ceil(svgH / 40) }).map((_, yi) => (
-                  <circle key={`d-${xi}-${yi}`} cx={xi * 40} cy={yi * 40} r={0.6} fill="#1e293b" />
-                ))
-              )}
+        <svg width="100%" height="100%" style={{ overflow: 'visible' }}>
+          <defs>
+            <pattern id="grid" width="30" height="30" patternUnits="userSpaceOnUse">
+              <circle cx="15" cy="15" r="0.5" fill="#1e293b" />
+            </pattern>
+          </defs>
+          <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
+            {/* Background grid */}
+            <rect width={layout.totalW} height={layout.totalH} fill="url(#grid)" />
 
-              {/* Arrows */}
-              {arrows.map((a, i) => {
-                const midY = (a.fromY + a.toY) / 2;
-                const path = Math.abs(a.fromX - a.toX) < 2
-                  ? `M ${a.fromX} ${a.fromY} L ${a.toX} ${a.toY}`
-                  : `M ${a.fromX} ${a.fromY} L ${a.fromX} ${midY} L ${a.toX} ${midY} L ${a.toX} ${a.toY}`;
-                return (
-                  <path key={`a-${i}`} d={path} fill="none" stroke={a.color} strokeWidth={1.5} strokeOpacity={0.5} markerEnd="url(#live-arrow)" />
-                );
-              })}
+            {/* ═══ CLUSTER BOUNDARY ═══ */}
+            <rect x={4} y={4} width={layout.totalW - 8} height={layout.totalH - 8} rx={16} fill="none" stroke="#334155" strokeWidth={2} strokeDasharray="8 4" />
+            <text x={16} y={22} fill="#475569" fontSize={11} fontWeight={700} fontFamily="system-ui">☸️ KUBERNETES CLUSTER</text>
 
-              {/* Resource nodes */}
-              {userRes.map(r => {
-                const pos = positions.get(r.id);
-                if (!pos) return null;
-                const style = RESOURCE_STYLE[r.type] || RESOURCE_STYLE.pod;
-                const status = r.metadata.status as string | undefined;
-                const displayName = r.name.length > 16 ? r.name.slice(0, 15) + '…' : r.name;
-                return (
-                  <g key={r.id}>
-                    <rect x={pos.x} y={pos.y} width={NODE_W} height={NODE_H} rx={10} fill={style.bg} stroke={style.border} strokeWidth={1.5} />
-                    <text x={pos.x + 14} y={pos.y + 24} fontSize={16}>{style.emoji}</text>
-                    <text x={pos.x + 36} y={pos.y + 24} fill={style.text} fontSize={11} fontWeight={600} fontFamily="system-ui, sans-serif">
-                      {displayName}
-                    </text>
-                    <text x={pos.x + 14} y={pos.y + 44} fill="#64748b" fontSize={9} fontFamily="system-ui, sans-serif">{r.type}</text>
-                    {status && (
-                      <text x={pos.x + NODE_W - 12} y={pos.y + 44} fill={status === 'Running' ? '#10b981' : '#f59e0b'} fontSize={9} textAnchor="end" fontFamily="system-ui, sans-serif">
-                        ● {status}
-                      </text>
-                    )}
-                  </g>
-                );
-              })}
-            </g>
-          </svg>
-        )}
-      </div>
+            {/* ═══ CONTROL PLANE ═══ */}
+            <rect x={layout.cpX} y={layout.cpY} width={layout.CONTROL_PLANE_W} height={layout.CONTROL_PLANE_H} rx={12} fill="#0f172a" stroke="#6366f1" strokeWidth={1.5} />
+            <text x={layout.cpX + 14} y={layout.cpY + 20} fill="#a78bfa" fontSize={11} fontWeight={700} fontFamily="system-ui">🧠 Control Plane (Master)</text>
+            {/* Control plane components */}
+            {['API Server', 'etcd', 'Scheduler', 'Controller Mgr'].map((comp, i) => {
+              const cx = layout.cpX + 14 + i * 120;
+              const cy = layout.cpY + 32;
+              return (
+                <g key={comp}>
+                  <rect x={cx} y={cy} width={108} height={26} rx={6} fill="#1e1b4b" stroke="#4f46e5" strokeWidth={1} />
+                  <text x={cx + 54} y={cy + 17} fill="#818cf8" fontSize={9} fontFamily="system-ui" textAnchor="middle">{comp}</text>
+                </g>
+              );
+            })}
 
-      <div className="px-3 py-1.5 bg-gray-900 border-t border-gray-800 flex-shrink-0">
-        <div className="flex flex-wrap gap-1">
-          {systemRes.map(r => (
-            <span key={r.id} className="text-xs bg-gray-800 text-gray-500 px-2 py-0.5 rounded">
-              {RESOURCE_STYLE[r.type]?.emoji} {r.name}
-            </span>
-          ))}
-        </div>
+            {/* ═══ WORKER NODES ═══ */}
+            {layout.nodeLayouts.map(n => (
+              <g key={n.name}>
+                <rect x={n.x} y={n.y} width={n.w} height={n.h} rx={12} fill="#0c1222" stroke={n.status.includes('Disabled') ? '#ef4444' : '#0ea5e9'} strokeWidth={1.5} />
+                <text x={n.x + 14} y={n.y + 20} fill={n.status.includes('Disabled') ? '#fca5a5' : '#7dd3fc'} fontSize={11} fontWeight={700} fontFamily="system-ui">
+                  🖥️ {n.name} (Worker Node)
+                </text>
+                <text x={n.x + n.w - 14} y={n.y + 20} fill={n.status === 'Ready' ? '#10b981' : '#ef4444'} fontSize={9} textAnchor="end" fontFamily="system-ui">
+                  ● {n.status}
+                </text>
+                {n.taints.length > 0 && (
+                  <text x={n.x + 14} y={n.y + 34} fill="#f59e0b" fontSize={8} fontFamily="system-ui">
+                    ⚠️ Taints: {n.taints.join(', ')}
+                  </text>
+                )}
+              </g>
+            ))}
+
+            {/* ═══ NAMESPACE BOXES ═══ */}
+            {layout.nsLayouts.map(ns => (
+              <g key={ns.name}>
+                <rect x={ns.x} y={ns.y} width={ns.w} height={ns.h} rx={10} fill="#0f172a" stroke="#6366f1" strokeWidth={1} strokeDasharray="4 2" opacity={0.8} />
+                <text x={ns.x + NS_PAD} y={ns.y + 16} fill="#a78bfa" fontSize={10} fontWeight={600} fontFamily="system-ui">
+                  📁 ns/{ns.name}
+                </text>
+                {/* Resources inside namespace */}
+                {ns.resources.map((r, i) => {
+                  const col = i % COLS_PER_NS;
+                  const row = Math.floor(i / COLS_PER_NS);
+                  const rx = ns.x + NS_PAD + col * (NODE_W + GAP);
+                  const ry = ns.y + 24 + NS_PAD + row * (NODE_H + GAP);
+                  return renderResource(r, rx, ry);
+                })}
+                {ns.resources.length === 0 && (
+                  <text x={ns.x + ns.w / 2} y={ns.y + ns.h / 2 + 8} fill="#334155" fontSize={9} textAnchor="middle" fontFamily="system-ui">(empty)</text>
+                )}
+              </g>
+            ))}
+
+            {/* ═══ CLUSTER-SCOPED RESOURCES ═══ */}
+            {layout.csLayouts.length > 0 && (
+              <>
+                <text x={layout.csLayouts[0].x} y={layout.csLayouts[0].y - 8} fill="#475569" fontSize={10} fontWeight={600} fontFamily="system-ui">
+                  🌍 Cluster-Scoped Resources
+                </text>
+                {layout.csLayouts.map(({ resource, x, y }) => renderResource(resource, x, y))}
+              </>
+            )}
+          </g>
+        </svg>
       </div>
     </div>
   );
