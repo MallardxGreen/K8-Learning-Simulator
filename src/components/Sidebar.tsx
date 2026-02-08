@@ -10,17 +10,10 @@ interface SidebarProps {
 
 const categoryIcons: Record<string, string> = {
   'Kubernetes Fundamentals': '☸️',
-  'Workloads': '📦',
-  'Networking': '🌐',
-  'Cluster Management': '🏗️',
-  'Configuration': '⚙️',
-  'Cloud Native': '☁️',
+  'Container Orchestration': '🔄',
+  'Cloud Native App Delivery': '🚢',
+  'Cloud Native Architecture': '☁️',
   'Interview Labs': '🎯',
-  'Storage': '💾',
-  'Security & RBAC': '🛡️',
-  'Scheduling': '📅',
-  'Observability': '📊',
-  'App Delivery': '🚢',
 };
 
 export default function Sidebar({ currentLessonId, progress, onSelectLesson, onResetProgress }: SidebarProps) {
