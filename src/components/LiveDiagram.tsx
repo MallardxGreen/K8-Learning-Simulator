@@ -33,6 +33,52 @@ const GAP = 16;
 const NS_PAD = 16;
 const COLS = 2;
 
+// Ownership hierarchy types
+const OWNER_TYPES = new Set(['deployment', 'statefulset', 'daemonset', 'job', 'cronjob', 'replicaset']);
+
+interface ResourceTree {
+  resource: K8sResource;
+  children: ResourceTree[];
+}
+
+/** Build ownership trees from a flat list of resources. Returns root-level trees + orphans. */
+function buildOwnershipTrees(resources: K8sResource[]): { trees: ResourceTree[]; orphans: K8sResource[] } {
+  const byId = new Map<string, K8sResource>();
+  for (const r of resources) byId.set(r.id, r);
+
+  // Build parent→children map
+  const childrenOf = new Map<string, K8sResource[]>();
+  const hasParent = new Set<string>();
+
+  for (const r of resources) {
+    const parentId = r.metadata.managedBy as string | undefined;
+    if (parentId && byId.has(parentId)) {
+      hasParent.add(r.id);
+      if (!childrenOf.has(parentId)) childrenOf.set(parentId, []);
+      childrenOf.get(parentId)!.push(r);
+    }
+  }
+
+  function buildTree(r: K8sResource): ResourceTree {
+    const kids = childrenOf.get(r.id) || [];
+    return { resource: r, children: kids.map(buildTree) };
+  }
+
+  const trees: ResourceTree[] = [];
+  const orphans: K8sResource[] = [];
+
+  for (const r of resources) {
+    if (hasParent.has(r.id)) continue; // skip children, they'll be nested
+    if (OWNER_TYPES.has(r.type) && childrenOf.has(r.id)) {
+      trees.push(buildTree(r));
+    } else {
+      orphans.push(r);
+    }
+  }
+
+  return { trees, orphans };
+}
+
 // Tooltip descriptions for resource types and control plane components
 const RESOURCE_INFO: Record<string, string> = {
   pod: 'Pod — The smallest deployable unit in K8s. Runs one or more containers sharing network and storage.',
@@ -89,26 +135,58 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
   const userResourceCount = namespacedRes.length + clusterScoped.length;
 
   // Assign each namespaced resource to a worker node, then group by node → namespace
+  // Only assign root-level resources (not children) to nodes — children follow their parent
   const nodeData = useMemo(() => {
     if (nodes.length === 0) return [];
 
-    // Build: nodeIndex → nsName → resources[]
+    // Identify which resources are children (have a parent in the resource list)
+    const allIds = new Set(namespacedRes.map(r => r.id));
+    const childIds = new Set<string>();
+    for (const r of namespacedRes) {
+      const parentId = r.metadata.managedBy as string | undefined;
+      if (parentId && allIds.has(parentId)) childIds.add(r.id);
+    }
+
+    // Build: nodeIndex → nsName → resources[] (only root-level resources assigned to nodes)
     const map: Map<number, Map<string, K8sResource[]>> = new Map();
     for (let i = 0; i < nodes.length; i++) map.set(i, new Map());
 
-    for (const r of namespacedRes) {
-      const ni = assignNode(r.id, nodes.length);
+    // Assign root resources to nodes
+    const rootResources = namespacedRes.filter(r => !childIds.has(r.id));
+    const rootNodeAssignment = new Map<string, number>(); // resource id → node index
+
+    for (const r of rootResources) {
+      const ni = assignNode(r.name, nodes.length);
+      rootNodeAssignment.set(r.id, ni);
       const nsName = r.namespace || 'default';
       const nodeMap = map.get(ni)!;
       if (!nodeMap.has(nsName)) nodeMap.set(nsName, []);
       nodeMap.get(nsName)!.push(r);
     }
 
+    // Now assign children to the same node as their root ancestor
+    function findRootAncestor(r: K8sResource): string {
+      const parentId = r.metadata.managedBy as string | undefined;
+      if (!parentId || !allIds.has(parentId)) return r.id;
+      const parent = namespacedRes.find(p => p.id === parentId);
+      return parent ? findRootAncestor(parent) : r.id;
+    }
+
+    for (const r of namespacedRes) {
+      if (childIds.has(r.id)) {
+        const rootId = findRootAncestor(r);
+        const ni = rootNodeAssignment.get(rootId) ?? assignNode(r.name, nodes.length);
+        const nsName = r.namespace || 'default';
+        const nodeMap = map.get(ni)!;
+        if (!nodeMap.has(nsName)) nodeMap.set(nsName, []);
+        nodeMap.get(nsName)!.push(r);
+      }
+    }
+
     return nodes.map((n, i) => {
       const nsMap = map.get(i)!;
       const taints = Array.isArray(n.metadata.taints) ? (n.metadata.taints as string[]) : [];
       const status = (n.metadata.status as string) || 'Ready';
-      // Sort namespaces: default first, then alphabetical
       const nsList = [...nsMap.entries()]
         .filter(([, res]) => res.length > 0)
         .sort(([a], [b]) => {
@@ -119,6 +197,24 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
       return { node: n, taints, status, namespaces: nsList };
     });
   }, [nodes, namespacedRes]);
+
+  // Measure the height of a tree group (parent card + children laid out in a row)
+  const GROUP_PAD = 10;
+  const GROUP_HEADER = 30;
+  const CHILD_GAP = 10;
+
+  function measureTree(tree: ResourceTree): { w: number; h: number } {
+    if (tree.children.length === 0) {
+      return { w: CARD_W, h: CARD_H };
+    }
+    // For trees with nested children (e.g. Deployment → RS → Pods), measure recursively
+    const childSizes = tree.children.map(c => measureTree(c));
+    const childrenW = childSizes.reduce((sum, s) => sum + s.w + CHILD_GAP, -CHILD_GAP);
+    const childrenH = Math.max(...childSizes.map(s => s.h));
+    const w = Math.max(CARD_W + GROUP_PAD * 2, childrenW + GROUP_PAD * 2);
+    const h = GROUP_HEADER + childrenH + GROUP_PAD * 2;
+    return { w, h };
+  }
 
   // Layout computation
   const layout = useMemo(() => {
@@ -136,7 +232,7 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
     cursorY += CP_H + 28;
 
     // Compute each worker node box
-    type NsLayout = { name: string; x: number; y: number; w: number; h: number; resources: K8sResource[] };
+    type NsLayout = { name: string; x: number; y: number; w: number; h: number; trees: ResourceTree[]; orphans: K8sResource[] };
     type NodeLayout = { name: string; x: number; y: number; w: number; h: number; taints: string[]; status: string; nsBoxes: NsLayout[] };
 
     const nodeLayouts: NodeLayout[] = [];
@@ -148,16 +244,40 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
     for (const nd of nodeData) {
       const nsBoxes: NsLayout[] = [];
       let innerY = NODE_HEADER;
-      const nsW = COLS * (CARD_W + GAP) + NS_PAD * 2 - GAP;
 
       for (const [nsName, nsRes] of nd.namespaces) {
-        const rows = Math.ceil(nsRes.length / COLS) || 1;
-        const nsH = NS_PAD + 24 + rows * (CARD_H + GAP) - GAP + NS_PAD;
-        nsBoxes.push({ name: nsName, x: NODE_PAD, y: innerY, w: nsW, h: nsH, resources: nsRes });
+        const { trees, orphans } = buildOwnershipTrees(nsRes);
+
+        // Calculate namespace box width: max of tree widths or default 2-col width
+        const defaultNsW = COLS * (CARD_W + GAP) + NS_PAD * 2 - GAP;
+        const treeSizes = trees.map(t => measureTree(t));
+        const maxTreeW = treeSizes.length > 0 ? Math.max(...treeSizes.map(s => s.w)) : 0;
+        const nsW = Math.max(defaultNsW, maxTreeW + NS_PAD * 2);
+
+        // Calculate height: trees stacked vertically, then orphans in grid below
+        let contentH = 24; // namespace label
+        for (const size of treeSizes) {
+          contentH += size.h + GAP;
+        }
+        // Orphans in 2-col grid
+        if (orphans.length > 0) {
+          const orphanRows = Math.ceil(orphans.length / COLS);
+          contentH += orphanRows * (CARD_H + GAP);
+        }
+        // Remove trailing gap, add padding
+        if (trees.length > 0 || orphans.length > 0) contentH -= GAP;
+        const nsH = NS_PAD + contentH + NS_PAD;
+
+        nsBoxes.push({ name: nsName, x: NODE_PAD, y: innerY, w: nsW, h: nsH, trees, orphans });
         innerY += nsH + GAP;
       }
 
-      const nodeW = nsW + NODE_PAD * 2;
+      const defaultNsW = COLS * (CARD_W + GAP) + NS_PAD * 2 - GAP;
+      const maxNsW = nsBoxes.length > 0 ? Math.max(...nsBoxes.map(b => b.w)) : defaultNsW;
+      // Equalize namespace widths within a node
+      for (const b of nsBoxes) b.w = maxNsW;
+
+      const nodeW = maxNsW + NODE_PAD * 2;
       const nodeH = nd.namespaces.length > 0 ? innerY + NODE_PAD : NODE_HEADER + 28;
 
       nodeLayouts.push({
@@ -175,7 +295,6 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
 
     nodesMaxW = Math.max(nodesMaxW, nodeX - GAP - PAD);
     const maxNodeH = nodeLayouts.reduce((m, n) => Math.max(m, n.h), 0);
-    // Equalize node heights
     for (const nl of nodeLayouts) nl.h = maxNodeH;
 
     cursorY = nodesStartY + maxNodeH + 20;
@@ -232,22 +351,68 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
     return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
   }, []);
 
-  function renderCard(r: K8sResource, x: number, y: number) {
+  function renderCard(r: K8sResource, x: number, y: number, w = CARD_W, h = CARD_H) {
     const style = RESOURCE_STYLE[r.type] || RESOURCE_STYLE.pod;
-    const label = r.name.length > 14 ? r.name.slice(0, 13) + '…' : r.name;
+    const maxChars = Math.floor((w - 40) / 6);
+    const label = r.name.length > maxChars ? r.name.slice(0, maxChars - 1) + '…' : r.name;
     const status = r.metadata.status as string | undefined;
     const info = RESOURCE_INFO[r.type] || r.type;
     const tooltip = `${r.name} (${r.type})${r.namespace ? ` in ns/${r.namespace}` : ''}\n\n${info}`;
     return (
       <g key={r.id} style={{ cursor: 'pointer' }}>
         <title>{tooltip}</title>
-        <rect x={x} y={y} width={CARD_W} height={CARD_H} rx={7} fill={style.bg} stroke={style.border} strokeWidth={1.5} />
-        <text x={x + 10} y={y + 20} fontSize={14}>{style.emoji}</text>
-        <text x={x + 30} y={y + 20} fill={style.text} fontSize={10} fontWeight={600} fontFamily="system-ui">{label}</text>
-        <text x={x + 10} y={y + 36} fill="#64748b" fontSize={8} fontFamily="system-ui">{r.type}</text>
+        <rect x={x} y={y} width={w} height={h} rx={7} fill={style.bg} stroke={style.border} strokeWidth={1.5} />
+        <text x={x + 10} y={y + (h / 2) - 4} fontSize={14}>{style.emoji}</text>
+        <text x={x + 30} y={y + (h / 2) - 4} fill={style.text} fontSize={10} fontWeight={600} fontFamily="system-ui">{label}</text>
+        <text x={x + 10} y={y + (h / 2) + 10} fill="#64748b" fontSize={8} fontFamily="system-ui">{r.type}</text>
         {status && (
-          <text x={x + CARD_W - 8} y={y + 36} fill={status === 'Running' ? '#10b981' : status.includes('Disabled') ? '#ef4444' : '#f59e0b'} fontSize={8} textAnchor="end" fontFamily="system-ui">● {status}</text>
+          <text x={x + w - 8} y={y + (h / 2) + 10} fill={status === 'Running' ? '#10b981' : status.includes('Disabled') ? '#ef4444' : '#f59e0b'} fontSize={8} textAnchor="end" fontFamily="system-ui">● {status}</text>
         )}
+      </g>
+    );
+  }
+
+  function renderTree(tree: ResourceTree, x: number, y: number): React.ReactElement {
+    const r = tree.resource;
+    const style = RESOURCE_STYLE[r.type] || RESOURCE_STYLE.pod;
+
+    if (tree.children.length === 0) {
+      return renderCard(r, x, y);
+    }
+
+    const size = measureTree(tree);
+    const info = RESOURCE_INFO[r.type] || r.type;
+    const tooltip = `${r.name} (${r.type})${r.namespace ? ` in ns/${r.namespace}` : ''}\n\n${info}`;
+
+    // Render as a group box: dashed border with parent label, children inside
+    return (
+      <g key={r.id}>
+        <title>{tooltip}</title>
+        {/* Group box */}
+        <rect
+          x={x} y={y} width={size.w} height={size.h}
+          rx={9} fill={`${style.bg}44`}
+          stroke={style.border} strokeWidth={1.5} strokeDasharray="6 3"
+        />
+        {/* Parent label row */}
+        <text x={x + GROUP_PAD + 2} y={y + 20} fontSize={12}>{style.emoji}</text>
+        <text x={x + GROUP_PAD + 20} y={y + 20} fill={style.text} fontSize={10} fontWeight={700} fontFamily="system-ui">
+          {r.name}
+        </text>
+        <text x={x + size.w - GROUP_PAD} y={y + 20} fill="#64748b" fontSize={8} textAnchor="end" fontFamily="system-ui">
+          {r.type}
+        </text>
+        {/* Children laid out horizontally */}
+        {tree.children.map((child, i) => {
+          const childSize = measureTree(child);
+          const prevWidths = tree.children.slice(0, i).reduce((sum, c) => sum + measureTree(c).w + CHILD_GAP, 0);
+          const cx = x + GROUP_PAD + prevWidths;
+          const cy = y + GROUP_HEADER + GROUP_PAD;
+          if (child.children.length > 0) {
+            return renderTree(child, cx, cy);
+          }
+          return renderCard(child.resource, cx, cy, childSize.w, childSize.h);
+        })}
       </g>
     );
   }
@@ -322,16 +487,33 @@ export default function LiveDiagram({ cluster }: LiveDiagramProps) {
                   <g key={ns.name}>
                     <rect x={n.x + ns.x} y={n.y + ns.y} width={ns.w} height={ns.h} rx={8} fill="rgba(99,102,241,0.05)" stroke="#6366f1" strokeWidth={1} strokeDasharray="4 2" />
                     <g style={{ cursor: 'pointer' }}>
-                      <title>{`Namespace: ${ns.name}\n${ns.resources.length} resource${ns.resources.length !== 1 ? 's' : ''}\n\n${RESOURCE_INFO.namespace}`}</title>
+                      <title>{`Namespace: ${ns.name}\n${ns.trees.reduce((s, t) => s + 1 + t.children.length, 0) + ns.orphans.length} resource${ns.trees.length + ns.orphans.length !== 1 ? 's' : ''}\n\n${RESOURCE_INFO.namespace}`}</title>
                       <text x={n.x + ns.x + NS_PAD} y={n.y + ns.y + 16} fill="#a78bfa" fontSize={9} fontWeight={600} fontFamily="system-ui">📁 ns/{ns.name}</text>
                     </g>
-                    {ns.resources.map((r, i) => {
-                      const col = i % COLS;
-                      const row = Math.floor(i / COLS);
-                      const rx = n.x + ns.x + NS_PAD + col * (CARD_W + GAP);
-                      const ry = n.y + ns.y + 20 + NS_PAD + row * (CARD_H + GAP);
-                      return renderCard(r, rx, ry);
-                    })}
+                    {/* Render ownership trees */}
+                    {(() => {
+                      let treeY = 24; // after namespace label
+                      return ns.trees.map(tree => {
+                        const size = measureTree(tree);
+                        const el = renderTree(tree, n.x + ns.x + NS_PAD, n.y + ns.y + NS_PAD + treeY);
+                        treeY += size.h + GAP;
+                        return el;
+                      });
+                    })()}
+                    {/* Render orphan resources as flat cards */}
+                    {(() => {
+                      let treeH = 24;
+                      for (const tree of ns.trees) {
+                        treeH += measureTree(tree).h + GAP;
+                      }
+                      return ns.orphans.map((r, i) => {
+                        const col = i % COLS;
+                        const row = Math.floor(i / COLS);
+                        const rx = n.x + ns.x + NS_PAD + col * (CARD_W + GAP);
+                        const ry = n.y + ns.y + NS_PAD + treeH + row * (CARD_H + GAP);
+                        return renderCard(r, rx, ry);
+                      });
+                    })()}
                   </g>
                 ))}
 
