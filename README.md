@@ -2,7 +2,7 @@
 
 An interactive, browser-based Kubernetes learning platform for KCNA, CKA, and CKAD certification prep.
 
-![K8s Academy Screenshot](./doc)<img width="1920" height="1080" alt="Screenshot 2026-02-11 at 10 41 29 AM (2)" src="https://github.com/user-attachments/assets/5bcf8007-11a4-46f2-b139-d194a6a163e2" />
+<img width="1920" height="1080" alt="Screenshot 2026-02-11 at 10 41 29 AM (2)" src="https://github.com/user-attachments/assets/5bcf8007-11a4-46f2-b139-d194a6a163e2" />
 
 
 ## What is this?
