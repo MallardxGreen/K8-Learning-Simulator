@@ -1,72 +1,37 @@
-# K8s Learning Simulator ☸️
+# K8s Academy
 
-An interactive, browser-based Kubernetes learning environment. Practice real `kubectl` commands against a simulated cluster — no cloud account, no Docker, no setup required.
+An interactive, browser-based Kubernetes learning platform for KCNA, CKA, and CKAD certification prep.
 
-Built to help people learn Kubernetes hands-on, from fundamentals through KCNA exam prep.
+![K8s Academy Screenshot](./docs/screenshot.png)
 
-## What It Does
+## What is this?
 
-- **Simulated cluster** — a fully in-browser K8s cluster with nodes, namespaces, pods, deployments, services, and more
-- **Interactive terminal** — type real `kubectl` commands and see realistic output
-- **Structured lessons** — progressive curriculum covering K8s fundamentals, architecture, workloads, networking, storage, security, and observability
-- **Hands-on challenges** — each lesson includes validation-based challenges that check your actual cluster state
-- **Live diagrams** — visual representation of your cluster as you build it
-- **Progress tracking** — pick up where you left off with localStorage-based progress
+K8s Academy is a hands-on Kubernetes study tool that runs entirely in your browser. It features a simulated kubectl terminal, a live cluster diagram, and challenges that validate against simulated cluster state — no real cluster required.
 
-## Tech Stack
+## Features
 
-- **React 19** + **TypeScript** — type-safe component architecture
-- **Vite** — fast dev server and build tooling
-- **Tailwind CSS 4** — utility-first styling
-- **Custom K8s engine** — full command parser and cluster state machine (`clusterState.ts`) that handles 50+ kubectl operations including resource creation, scaling, labeling, context switching, and more
-
-## Project Structure
-
-```
-src/
-├── App.tsx                  # Main app layout and state management
-├── clusterState.ts          # K8s cluster simulation engine (command parser + state machine)
-├── lessons.ts               # Full lesson curriculum with challenges
-├── types.ts                 # TypeScript interfaces
-└── components/
-    ├── Sidebar.tsx           # Lesson navigation and progress
-    ├── LessonContent.tsx     # Lesson display with markdown rendering
-    ├── InteractivePanel.tsx  # Practice panel with terminal + diagram tabs
-    ├── TryItTerminal.tsx     # Interactive kubectl terminal
-    ├── ChallengePanel.tsx    # Challenge validation UI
-    └── LiveDiagram.tsx       # Real-time cluster visualization
-```
+- **Three certification tracks** — KCNA, CKA, and CKAD, each aligned to official exam domains
+- **Simulated kubectl terminal** — Run commands like `kubectl create deployment`, `kubectl get pods`, `kubectl expose`, and more against an in-memory cluster
+- **Live cluster visualization** — SVG diagram updates in real time as you create and modify resources
+- **Hands-on labs** — 10 labs per CKA/CKAD track with guided challenges and validation
+- **Progress tracking** — Completed lessons and challenges saved to localStorage
 
 ## Getting Started
 
-```bash
+```sh
 git clone https://github.com/MallardxGreen/K8-Learning-Simulator.git
-cd K8-Learning-Simulator
+cd K8-Learning-Simulator/k8s-simulator
 npm install
 npm run dev
 ```
 
-Open `http://localhost:5173` and start learning.
+Then open [http://localhost:5173](http://localhost:5173).
 
-## Supported Commands
+## Tech Stack
 
-The simulator handles a wide range of kubectl operations:
-
-- `kubectl get [resource]` — list resources with filtering and namespace support
-- `kubectl create` — namespaces, deployments, services, configmaps, secrets, and more
-- `kubectl run` — create pods with image specification
-- `kubectl apply -f` — YAML-based resource creation
-- `kubectl delete` — remove resources
-- `kubectl describe` — detailed resource information
-- `kubectl scale` — adjust replica counts
-- `kubectl label` / `kubectl annotate` — metadata management
-- `kubectl config` — context switching between clusters
-- `etcdctl` — simulated etcd operations
-- And more: `logs`, `exec`, `port-forward`, `top`, `cordon/uncordon`, `taint`
-
-## Why I Built This
-
-I'm an AWS Solutions Architect with a background in cloud support engineering. Kubernetes is a core skill in the cloud native space, and I wanted a way to practice and teach K8s concepts without needing a full cluster running. This simulator lets anyone jump in and start learning immediately.
+- React 19 + TypeScript
+- Vite 7
+- Tailwind CSS v4
 
 ## License
 
