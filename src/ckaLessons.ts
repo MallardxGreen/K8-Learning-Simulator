@@ -1061,4 +1061,282 @@ kubectl get events</code></pre>
       { id: 'cka-lab-5', task: 'Create role "deployer" that can get,list,create,delete pods', hint: 'kubectl create role deployer --verb=get,list,create,delete --resource=pods', answer: 'kubectl create role deployer --verb=get,list,create,delete --resource=pods', validate: (c) => c.resources.some(r => r.type === 'role' && r.name === 'deployer') },
     ],
   },
+
+  // ── CKA LAB: etcd Backup & Recovery ──
+  {
+    id: 'cka-lab-etcd-backup',
+    title: 'Lab: etcd Backup & Recovery',
+    category: 'CKA Labs',
+    course: 'cka',
+    content: `
+<h2>🧪 Lab: etcd Backup & Recovery</h2>
+<p>This lab simulates preparing a cluster for an etcd backup. You'll create resources that represent critical cluster data that would need to be preserved.</p>
+
+<h3>Scenario</h3>
+<p>Your team needs to perform an etcd backup before a major cluster upgrade. First, ensure the cluster has important data worth backing up:</p>
+<ol>
+  <li>Create a namespace called <code>backup-test</code></li>
+  <li>Run a pod called <code>critical-app</code> with nginx in the backup-test namespace</li>
+  <li>Create a configmap called <code>backup-config</code> with backup schedule data</li>
+  <li>Label node-1 with <code>backup=enabled</code> to mark it as the backup target</li>
+  <li>Run a pod called <code>etcd-helper</code> to simulate the backup utility</li>
+</ol>
+`,
+    example: 'kubectl create namespace backup-test',
+    challenges: [
+      { id: 'cka-lab-etcd-1', task: 'Create namespace "backup-test"', hint: 'kubectl create namespace backup-test', answer: 'kubectl create namespace backup-test', validate: (c) => c.resources.some(r => r.type === 'namespace' && r.name === 'backup-test') },
+      { id: 'cka-lab-etcd-2', task: 'Run pod "critical-app" with nginx in backup-test namespace', hint: 'kubectl run critical-app --image=nginx -n backup-test', answer: 'kubectl run critical-app --image=nginx -n backup-test', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'critical-app') },
+      { id: 'cka-lab-etcd-3', task: 'Create configmap "backup-config" with schedule=daily', hint: 'kubectl create configmap backup-config --from-literal=schedule=daily', answer: 'kubectl create configmap backup-config --from-literal=schedule=daily', validate: (c) => c.resources.some(r => r.type === 'configmap' && r.name === 'backup-config') },
+      { id: 'cka-lab-etcd-4', task: 'Label node-1 with backup=enabled', hint: 'kubectl label node node-1 backup=enabled', answer: 'kubectl label node node-1 backup=enabled', validate: (c) => c.resources.some(r => r.type === 'node' && r.name === 'node-1' && r.labels['backup'] === 'enabled') },
+      { id: 'cka-lab-etcd-5', task: 'Run pod "etcd-helper" with busybox image', hint: 'kubectl run etcd-helper --image=busybox', answer: 'kubectl run etcd-helper --image=busybox', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'etcd-helper') },
+    ],
+  },
+
+  // ── CKA LAB: RBAC Configuration ──
+  {
+    id: 'cka-lab-rbac',
+    title: 'Lab: RBAC Configuration',
+    category: 'CKA Labs',
+    course: 'cka',
+    content: `
+<h2>🧪 Lab: RBAC Configuration</h2>
+<p>This lab tests your ability to configure Role-Based Access Control from scratch — a core CKA skill.</p>
+
+<h3>Scenario</h3>
+<p>A new developer team needs access to the cluster. Set up RBAC so they can manage pods but nothing else:</p>
+<ol>
+  <li>Create a service account called <code>dev-sa</code></li>
+  <li>Create a role called <code>pod-manager</code> that can get, list, create, and delete pods</li>
+  <li>Create a rolebinding called <code>dev-pod-access</code> binding the role to the service account</li>
+  <li>Create a clusterrole called <code>node-viewer</code> that can get and list nodes</li>
+  <li>Verify access with <code>kubectl auth can-i</code></li>
+</ol>
+`,
+    example: 'kubectl create serviceaccount dev-sa',
+    challenges: [
+      { id: 'cka-lab-rbac-1', task: 'Create service account "dev-sa"', hint: 'kubectl create serviceaccount dev-sa', answer: 'kubectl create serviceaccount dev-sa', validate: (c) => c.resources.some(r => r.type === 'serviceaccount' && r.name === 'dev-sa') },
+      { id: 'cka-lab-rbac-2', task: 'Create role "pod-manager" with verbs get,list,create,delete on pods', hint: 'kubectl create role pod-manager --verb=get,list,create,delete --resource=pods', answer: 'kubectl create role pod-manager --verb=get,list,create,delete --resource=pods', validate: (c) => c.resources.some(r => r.type === 'role' && r.name === 'pod-manager') },
+      { id: 'cka-lab-rbac-3', task: 'Create rolebinding "dev-pod-access" binding pod-manager to dev-sa', hint: 'kubectl create rolebinding dev-pod-access --role=pod-manager --serviceaccount=default:dev-sa', answer: 'kubectl create rolebinding dev-pod-access --role=pod-manager --serviceaccount=default:dev-sa', validate: (c) => c.resources.some(r => r.type === 'rolebinding' && r.name === 'dev-pod-access') },
+      { id: 'cka-lab-rbac-4', task: 'Create clusterrole "node-viewer" with verbs get,list on nodes', hint: 'kubectl create clusterrole node-viewer --verb=get,list --resource=nodes', answer: 'kubectl create clusterrole node-viewer --verb=get,list --resource=nodes', validate: (c) => c.resources.some(r => r.type === 'clusterrole' && r.name === 'node-viewer') },
+      { id: 'cka-lab-rbac-5', task: 'Check if dev-sa can list pods', hint: 'kubectl auth can-i list pods --as system:serviceaccount:default:dev-sa', answer: 'kubectl auth can-i list pods --as system:serviceaccount:default:dev-sa', validate: () => true },
+    ],
+  },
+
+  // ── CKA LAB: Node Maintenance ──
+  {
+    id: 'cka-lab-node-maintenance',
+    title: 'Lab: Node Maintenance',
+    category: 'CKA Labs',
+    course: 'cka',
+    content: `
+<h2>🧪 Lab: Node Maintenance</h2>
+<p>This lab simulates performing maintenance on cluster nodes — a common CKA exam task.</p>
+
+<h3>Scenario</h3>
+<p>Node-2 needs a kernel upgrade. Prepare the cluster for maintenance:</p>
+<ol>
+  <li>Label node-1 with <code>role=worker</code></li>
+  <li>Taint node-2 with <code>maintenance=true:NoSchedule</code> to prevent new pods</li>
+  <li>Cordon node-2 to mark it as unschedulable</li>
+  <li>Run a pod called <code>maintenance-pod</code> to verify it lands on node-1</li>
+  <li>Label node-2 with <code>status=upgrading</code></li>
+  <li>Uncordon node-2 after maintenance is complete</li>
+</ol>
+`,
+    example: 'kubectl label node node-1 role=worker',
+    challenges: [
+      { id: 'cka-lab-nm-1', task: 'Label node-1 with role=worker', hint: 'kubectl label node node-1 role=worker', answer: 'kubectl label node node-1 role=worker', validate: (c) => c.resources.some(r => r.type === 'node' && r.name === 'node-1' && r.labels['role'] === 'worker') },
+      { id: 'cka-lab-nm-2', task: 'Taint node-2 with maintenance=true:NoSchedule', hint: 'kubectl taint nodes node-2 maintenance=true:NoSchedule', answer: 'kubectl taint nodes node-2 maintenance=true:NoSchedule', validate: (c) => c.resources.some(r => r.type === 'node' && r.name === 'node-2' && Array.isArray((r.metadata as Record<string, unknown>)?.taints)) },
+      { id: 'cka-lab-nm-3', task: 'Cordon node-2', hint: 'kubectl cordon node-2', answer: 'kubectl cordon node-2', validate: () => true },
+      { id: 'cka-lab-nm-4', task: 'Run pod "maintenance-pod" with nginx image', hint: 'kubectl run maintenance-pod --image=nginx', answer: 'kubectl run maintenance-pod --image=nginx', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'maintenance-pod') },
+      { id: 'cka-lab-nm-5', task: 'Label node-2 with status=upgrading', hint: 'kubectl label node node-2 status=upgrading', answer: 'kubectl label node node-2 status=upgrading', validate: (c) => c.resources.some(r => r.type === 'node' && r.name === 'node-2' && r.labels['status'] === 'upgrading') },
+      { id: 'cka-lab-nm-6', task: 'Uncordon node-2', hint: 'kubectl uncordon node-2', answer: 'kubectl uncordon node-2', validate: () => true },
+    ],
+  },
+
+  // ── CKA LAB: Service & Networking ──
+  {
+    id: 'cka-lab-networking',
+    title: 'Lab: Service & Networking',
+    category: 'CKA Labs',
+    course: 'cka',
+    content: `
+<h2>🧪 Lab: Service & Networking</h2>
+<p>This lab covers creating deployments and exposing them with different service types — essential CKA networking skills.</p>
+
+<h3>Scenario</h3>
+<p>Deploy a multi-tier application with proper networking:</p>
+<ol>
+  <li>Create a deployment called <code>frontend</code> with nginx and 2 replicas</li>
+  <li>Expose frontend as a ClusterIP service called <code>frontend-svc</code> on port 80</li>
+  <li>Create a deployment called <code>backend</code> with httpd and 2 replicas</li>
+  <li>Expose backend as a NodePort service called <code>backend-svc</code> on port 80</li>
+  <li>Create an ingress called <code>app-ingress</code> routing to frontend-svc</li>
+</ol>
+`,
+    example: 'kubectl create deployment frontend --image=nginx --replicas=2',
+    challenges: [
+      { id: 'cka-lab-net-1', task: 'Create deployment "frontend" with nginx and 2 replicas', hint: 'kubectl create deployment frontend --image=nginx --replicas=2', answer: 'kubectl create deployment frontend --image=nginx --replicas=2', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'frontend') },
+      { id: 'cka-lab-net-2', task: 'Expose frontend as ClusterIP service "frontend-svc" on port 80', hint: 'kubectl expose deployment frontend --port=80 --name=frontend-svc', answer: 'kubectl expose deployment frontend --port=80 --name=frontend-svc', validate: (c) => c.resources.some(r => r.type === 'service' && r.name === 'frontend-svc') },
+      { id: 'cka-lab-net-3', task: 'Create deployment "backend" with httpd and 2 replicas', hint: 'kubectl create deployment backend --image=httpd --replicas=2', answer: 'kubectl create deployment backend --image=httpd --replicas=2', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'backend') },
+      { id: 'cka-lab-net-4', task: 'Expose backend as NodePort service "backend-svc" on port 80', hint: 'kubectl expose deployment backend --port=80 --type=NodePort --name=backend-svc', answer: 'kubectl expose deployment backend --port=80 --type=NodePort --name=backend-svc', validate: (c) => c.resources.some(r => r.type === 'service' && r.name === 'backend-svc') },
+      { id: 'cka-lab-net-5', task: 'Create ingress "app-ingress" routing to frontend-svc', hint: 'kubectl create ingress app-ingress --rule="app.example.com/=frontend-svc:80"', answer: 'kubectl create ingress app-ingress --rule="app.example.com/=frontend-svc:80"', validate: (c) => c.resources.some(r => r.type === 'ingress' && r.name === 'app-ingress') },
+    ],
+  },
+
+  // ── CKA LAB: Storage Configuration ──
+  {
+    id: 'cka-lab-storage',
+    title: 'Lab: Storage Configuration',
+    category: 'CKA Labs',
+    course: 'cka',
+    content: `
+<h2>🧪 Lab: Storage Configuration</h2>
+<p>This lab focuses on setting up storage-related resources for database workloads.</p>
+
+<h3>Scenario</h3>
+<p>Prepare the cluster for stateful database workloads:</p>
+<ol>
+  <li>Create a namespace called <code>databases</code></li>
+  <li>Run a pod called <code>mysql-db</code> with mysql image in the databases namespace</li>
+  <li>Run a pod called <code>postgres-db</code> with postgres image in the databases namespace</li>
+  <li>Create a configmap called <code>db-config</code> with storage settings</li>
+  <li>Create a secret called <code>db-credentials</code> for database passwords</li>
+</ol>
+`,
+    example: 'kubectl create namespace databases',
+    challenges: [
+      { id: 'cka-lab-stor-1', task: 'Create namespace "databases"', hint: 'kubectl create namespace databases', answer: 'kubectl create namespace databases', validate: (c) => c.resources.some(r => r.type === 'namespace' && r.name === 'databases') },
+      { id: 'cka-lab-stor-2', task: 'Run pod "mysql-db" with mysql image in databases namespace', hint: 'kubectl run mysql-db --image=mysql -n databases', answer: 'kubectl run mysql-db --image=mysql -n databases', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'mysql-db') },
+      { id: 'cka-lab-stor-3', task: 'Run pod "postgres-db" with postgres image in databases namespace', hint: 'kubectl run postgres-db --image=postgres -n databases', answer: 'kubectl run postgres-db --image=postgres -n databases', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'postgres-db') },
+      { id: 'cka-lab-stor-4', task: 'Create configmap "db-config" with storage-type=ssd', hint: 'kubectl create configmap db-config --from-literal=storage-type=ssd -n databases', answer: 'kubectl create configmap db-config --from-literal=storage-type=ssd -n databases', validate: (c) => c.resources.some(r => r.type === 'configmap' && r.name === 'db-config') },
+      { id: 'cka-lab-stor-5', task: 'Create secret "db-credentials" with password=admin123', hint: 'kubectl create secret generic db-credentials --from-literal=password=admin123 -n databases', answer: 'kubectl create secret generic db-credentials --from-literal=password=admin123 -n databases', validate: (c) => c.resources.some(r => r.type === 'secret' && r.name === 'db-credentials') },
+    ],
+  },
+
+  // ── CKA LAB: Cluster Troubleshooting ──
+  {
+    id: 'cka-lab-troubleshoot',
+    title: 'Lab: Cluster Troubleshooting',
+    category: 'CKA Labs',
+    course: 'cka',
+    content: `
+<h2>🧪 Lab: Cluster Troubleshooting</h2>
+<p>This lab simulates a broken cluster environment. Diagnose and fix the issues.</p>
+
+<h3>Scenario</h3>
+<p>Several things are wrong in the cluster. Investigate and resolve:</p>
+<ol>
+  <li>Run a pod called <code>broken-app</code> with a bad image <code>nginx:nonexistent</code></li>
+  <li>Describe the broken pod to see the error</li>
+  <li>Run a working pod called <code>fixed-app</code> with nginx</li>
+  <li>Expose fixed-app as service <code>fixed-svc</code> on port 80</li>
+  <li>Describe the service to verify endpoints</li>
+  <li>Run a debug pod called <code>debug-pod</code> with busybox for troubleshooting</li>
+</ol>
+`,
+    example: 'kubectl run broken-app --image=nginx:nonexistent',
+    challenges: [
+      { id: 'cka-lab-ts-1', task: 'Run pod "broken-app" with image nginx:nonexistent', hint: 'kubectl run broken-app --image=nginx:nonexistent', answer: 'kubectl run broken-app --image=nginx:nonexistent', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'broken-app') },
+      { id: 'cka-lab-ts-2', task: 'Describe the broken-app pod to see the error', hint: 'kubectl describe pod broken-app', answer: 'kubectl describe pod broken-app', validate: () => true },
+      { id: 'cka-lab-ts-3', task: 'Run a working pod "fixed-app" with nginx', hint: 'kubectl run fixed-app --image=nginx', answer: 'kubectl run fixed-app --image=nginx', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'fixed-app') },
+      { id: 'cka-lab-ts-4', task: 'Expose fixed-app as service "fixed-svc" on port 80', hint: 'kubectl expose pod fixed-app --port=80 --name=fixed-svc', answer: 'kubectl expose pod fixed-app --port=80 --name=fixed-svc', validate: (c) => c.resources.some(r => r.type === 'service' && r.name === 'fixed-svc') },
+      { id: 'cka-lab-ts-5', task: 'Describe the fixed-svc service', hint: 'kubectl describe svc fixed-svc', answer: 'kubectl describe svc fixed-svc', validate: () => true },
+      { id: 'cka-lab-ts-6', task: 'Run a debug pod "debug-pod" with busybox', hint: 'kubectl run debug-pod --image=busybox', answer: 'kubectl run debug-pod --image=busybox', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'debug-pod') },
+    ],
+  },
+
+  // ── CKA LAB: Deployment & Scaling ──
+  {
+    id: 'cka-lab-deployments',
+    title: 'Lab: Deployment & Scaling',
+    category: 'CKA Labs',
+    course: 'cka',
+    content: `
+<h2>🧪 Lab: Deployment & Scaling</h2>
+<p>This lab covers the full deployment lifecycle: create, scale, update, and rollback.</p>
+
+<h3>Scenario</h3>
+<p>Manage a production deployment through its lifecycle:</p>
+<ol>
+  <li>Create a deployment called <code>webapp</code> with nginx and 3 replicas</li>
+  <li>Scale the deployment to 5 replicas</li>
+  <li>Update the image to httpd using <code>set image</code></li>
+  <li>Check the rollout status</li>
+  <li>Roll back to the previous version</li>
+</ol>
+`,
+    example: 'kubectl create deployment webapp --image=nginx --replicas=3',
+    challenges: [
+      { id: 'cka-lab-dep-1', task: 'Create deployment "webapp" with nginx and 3 replicas', hint: 'kubectl create deployment webapp --image=nginx --replicas=3', answer: 'kubectl create deployment webapp --image=nginx --replicas=3', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'webapp') },
+      { id: 'cka-lab-dep-2', task: 'Scale webapp deployment to 5 replicas', hint: 'kubectl scale deployment webapp --replicas=5', answer: 'kubectl scale deployment webapp --replicas=5', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'webapp') },
+      { id: 'cka-lab-dep-3', task: 'Update webapp image to httpd', hint: 'kubectl set image deployment/webapp nginx=httpd', answer: 'kubectl set image deployment/webapp nginx=httpd', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'webapp') },
+      { id: 'cka-lab-dep-4', task: 'Check rollout status of webapp', hint: 'kubectl rollout status deployment/webapp', answer: 'kubectl rollout status deployment/webapp', validate: () => true },
+      { id: 'cka-lab-dep-5', task: 'Roll back webapp to previous version', hint: 'kubectl rollout undo deployment/webapp', answer: 'kubectl rollout undo deployment/webapp', validate: () => true },
+    ],
+  },
+
+  // ── CKA LAB: Multi-Cluster Namespaces ──
+  {
+    id: 'cka-lab-namespaces',
+    title: 'Lab: Multi-Cluster Namespaces',
+    category: 'CKA Labs',
+    course: 'cka',
+    content: `
+<h2>🧪 Lab: Multi-Cluster Namespaces</h2>
+<p>This lab tests your ability to manage resources across multiple namespaces with proper access controls.</p>
+
+<h3>Scenario</h3>
+<p>Set up a multi-team cluster with isolated namespaces:</p>
+<ol>
+  <li>Create namespace <code>team-alpha</code></li>
+  <li>Create namespace <code>team-beta</code></li>
+  <li>Deploy <code>alpha-app</code> with nginx in team-alpha</li>
+  <li>Deploy <code>beta-app</code> with httpd in team-beta</li>
+  <li>Expose alpha-app as service <code>alpha-svc</code> in team-alpha</li>
+  <li>Create a role called <code>namespace-admin</code> in team-alpha for full pod management</li>
+</ol>
+`,
+    example: 'kubectl create namespace team-alpha',
+    challenges: [
+      { id: 'cka-lab-ns-1', task: 'Create namespace "team-alpha"', hint: 'kubectl create namespace team-alpha', answer: 'kubectl create namespace team-alpha', validate: (c) => c.resources.some(r => r.type === 'namespace' && r.name === 'team-alpha') },
+      { id: 'cka-lab-ns-2', task: 'Create namespace "team-beta"', hint: 'kubectl create namespace team-beta', answer: 'kubectl create namespace team-beta', validate: (c) => c.resources.some(r => r.type === 'namespace' && r.name === 'team-beta') },
+      { id: 'cka-lab-ns-3', task: 'Run pod "alpha-app" with nginx in team-alpha', hint: 'kubectl run alpha-app --image=nginx -n team-alpha', answer: 'kubectl run alpha-app --image=nginx -n team-alpha', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'alpha-app') },
+      { id: 'cka-lab-ns-4', task: 'Run pod "beta-app" with httpd in team-beta', hint: 'kubectl run beta-app --image=httpd -n team-beta', answer: 'kubectl run beta-app --image=httpd -n team-beta', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'beta-app') },
+      { id: 'cka-lab-ns-5', task: 'Expose alpha-app as service "alpha-svc" on port 80 in team-alpha', hint: 'kubectl expose pod alpha-app --port=80 --name=alpha-svc -n team-alpha', answer: 'kubectl expose pod alpha-app --port=80 --name=alpha-svc -n team-alpha', validate: (c) => c.resources.some(r => r.type === 'service' && r.name === 'alpha-svc') },
+      { id: 'cka-lab-ns-6', task: 'Create role "namespace-admin" with full pod access in team-alpha', hint: 'kubectl create role namespace-admin --verb=get,list,create,delete,update --resource=pods -n team-alpha', answer: 'kubectl create role namespace-admin --verb=get,list,create,delete,update --resource=pods -n team-alpha', validate: (c) => c.resources.some(r => r.type === 'role' && r.name === 'namespace-admin') },
+    ],
+  },
+
+  // ── CKA LAB: Security & Pod Hardening ──
+  {
+    id: 'cka-lab-security',
+    title: 'Lab: Security & Pod Hardening',
+    category: 'CKA Labs',
+    course: 'cka',
+    content: `
+<h2>🧪 Lab: Security & Pod Hardening</h2>
+<p>This lab focuses on securing workloads with service accounts, secrets, RBAC, and network segmentation labels.</p>
+
+<h3>Scenario</h3>
+<p>Harden a production namespace with least-privilege access:</p>
+<ol>
+  <li>Create a service account called <code>secure-sa</code></li>
+  <li>Create a secret called <code>app-secret</code> with API key data</li>
+  <li>Run a pod called <code>secure-app</code> with label <code>tier=frontend</code></li>
+  <li>Run a pod called <code>db-pod</code> with label <code>tier=backend</code></li>
+  <li>Create a role called <code>least-privilege</code> that can only get and list pods</li>
+  <li>Create a rolebinding called <code>secure-binding</code> binding the role to secure-sa</li>
+</ol>
+`,
+    example: 'kubectl create serviceaccount secure-sa',
+    challenges: [
+      { id: 'cka-lab-sec-1', task: 'Create service account "secure-sa"', hint: 'kubectl create serviceaccount secure-sa', answer: 'kubectl create serviceaccount secure-sa', validate: (c) => c.resources.some(r => r.type === 'serviceaccount' && r.name === 'secure-sa') },
+      { id: 'cka-lab-sec-2', task: 'Create secret "app-secret" with api-key=supersecret', hint: 'kubectl create secret generic app-secret --from-literal=api-key=supersecret', answer: 'kubectl create secret generic app-secret --from-literal=api-key=supersecret', validate: (c) => c.resources.some(r => r.type === 'secret' && r.name === 'app-secret') },
+      { id: 'cka-lab-sec-3', task: 'Run pod "secure-app" with nginx and label tier=frontend', hint: 'kubectl run secure-app --image=nginx --labels=tier=frontend', answer: 'kubectl run secure-app --image=nginx --labels=tier=frontend', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'secure-app' && r.labels['tier'] === 'frontend') },
+      { id: 'cka-lab-sec-4', task: 'Run pod "db-pod" with postgres and label tier=backend', hint: 'kubectl run db-pod --image=postgres --labels=tier=backend', answer: 'kubectl run db-pod --image=postgres --labels=tier=backend', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'db-pod' && r.labels['tier'] === 'backend') },
+      { id: 'cka-lab-sec-5', task: 'Create role "least-privilege" with get,list on pods', hint: 'kubectl create role least-privilege --verb=get,list --resource=pods', answer: 'kubectl create role least-privilege --verb=get,list --resource=pods', validate: (c) => c.resources.some(r => r.type === 'role' && r.name === 'least-privilege') },
+      { id: 'cka-lab-sec-6', task: 'Create rolebinding "secure-binding" binding least-privilege to secure-sa', hint: 'kubectl create rolebinding secure-binding --role=least-privilege --serviceaccount=default:secure-sa', answer: 'kubectl create rolebinding secure-binding --role=least-privilege --serviceaccount=default:secure-sa', validate: (c) => c.resources.some(r => r.type === 'rolebinding' && r.name === 'secure-binding') },
+    ],
+  },
 ];

@@ -1079,4 +1079,276 @@ kubectl get pods --show-labels</code></pre>
       { id: 'ckad-lab-6', task: 'Create job "db-migrate" using busybox', hint: 'kubectl create job db-migrate --image=busybox -- echo migrate', answer: 'kubectl create job db-migrate --image=busybox -- echo migrate', validate: (c) => c.resources.some(r => r.type === 'job' && r.name === 'db-migrate') },
     ],
   },
+
+  // ── CKAD LAB: Multi-Container Pods ──
+  {
+    id: 'ckad-lab-multi-container',
+    title: 'Lab: Multi-Container Pods',
+    category: 'CKAD Labs',
+    course: 'ckad',
+    content: `
+<h2>🧪 Lab: Multi-Container Pods</h2>
+<p>This lab focuses on building multi-container pod architectures with shared configuration and networking.</p>
+
+<h3>Scenario</h3>
+<p>You are setting up a logging pipeline. An application pod needs a sidecar container for log forwarding, shared configuration via ConfigMaps, a service for access, and a secret for credentials.</p>
+<ol>
+  <li>Run a pod called <code>app-logger</code> with nginx</li>
+  <li>Create a configmap <code>sidecar-config</code> with <code>LOG_LEVEL=debug</code></li>
+  <li>Run a pod called <code>log-forwarder</code> with busybox (the sidecar)</li>
+  <li>Create a service <code>logger-svc</code> exposing port 80</li>
+  <li>Create a secret <code>logger-creds</code> with <code>token=abc123</code></li>
+</ol>
+`,
+    example: 'kubectl run app-logger --image=nginx',
+    challenges: [
+      { id: 'ckad-lab-mc-1', task: 'Run pod "app-logger" with nginx', hint: 'kubectl run app-logger --image=nginx', answer: 'kubectl run app-logger --image=nginx', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'app-logger') },
+      { id: 'ckad-lab-mc-2', task: 'Create configmap "sidecar-config" with LOG_LEVEL=debug', hint: 'kubectl create configmap sidecar-config --from-literal=LOG_LEVEL=debug', answer: 'kubectl create configmap sidecar-config --from-literal=LOG_LEVEL=debug', validate: (c) => c.resources.some(r => r.type === 'configmap' && r.name === 'sidecar-config') },
+      { id: 'ckad-lab-mc-3', task: 'Run pod "log-forwarder" with busybox', hint: 'kubectl run log-forwarder --image=busybox', answer: 'kubectl run log-forwarder --image=busybox', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'log-forwarder') },
+      { id: 'ckad-lab-mc-4', task: 'Create service "logger-svc" on port 80', hint: 'kubectl create service clusterip logger-svc --tcp=80:80', answer: 'kubectl create service clusterip logger-svc --tcp=80:80', validate: (c) => c.resources.some(r => r.type === 'service' && r.name === 'logger-svc') },
+      { id: 'ckad-lab-mc-5', task: 'Create secret "logger-creds" with token=abc123', hint: 'kubectl create secret generic logger-creds --from-literal=token=abc123', answer: 'kubectl create secret generic logger-creds --from-literal=token=abc123', validate: (c) => c.resources.some(r => r.type === 'secret' && r.name === 'logger-creds') },
+    ],
+  },
+
+  // ── CKAD LAB: Rolling Updates & Rollbacks ──
+  {
+    id: 'ckad-lab-rolling-updates',
+    title: 'Lab: Rolling Updates & Rollbacks',
+    category: 'CKAD Labs',
+    course: 'ckad',
+    content: `
+<h2>🧪 Lab: Rolling Updates & Rollbacks</h2>
+<p>This lab tests your ability to manage deployment lifecycles including updates, scaling, and exposing services.</p>
+
+<h3>Scenario</h3>
+<p>You need to deploy a web application, perform a rolling update to a new version, scale it for traffic, and expose it via a service.</p>
+<ol>
+  <li>Create deployment <code>webapp</code> with image <code>nginx:1.24</code> and 3 replicas</li>
+  <li>Update the deployment image to <code>nginx:1.25</code></li>
+  <li>Scale the deployment to 5 replicas</li>
+  <li>Expose the deployment as service <code>webapp-svc</code> on port 80</li>
+</ol>
+`,
+    example: 'kubectl create deployment webapp --image=nginx:1.24 --replicas=3',
+    challenges: [
+      { id: 'ckad-lab-ru-1', task: 'Create deployment "webapp" with nginx:1.24 and 3 replicas', hint: 'kubectl create deployment webapp --image=nginx:1.24 --replicas=3', answer: 'kubectl create deployment webapp --image=nginx:1.24 --replicas=3', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'webapp') },
+      { id: 'ckad-lab-ru-2', task: 'Update webapp image to nginx:1.25', hint: 'kubectl set image deployment/webapp nginx=nginx:1.25', answer: 'kubectl set image deployment/webapp nginx=nginx:1.25', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'webapp' && r.metadata?.image === 'nginx:1.25') },
+      { id: 'ckad-lab-ru-3', task: 'Scale webapp to 5 replicas', hint: 'kubectl scale deployment webapp --replicas=5', answer: 'kubectl scale deployment webapp --replicas=5', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'webapp' && r.metadata?.replicas === 5) },
+      { id: 'ckad-lab-ru-4', task: 'Expose webapp as "webapp-svc" on port 80', hint: 'kubectl expose deployment webapp --port=80 --name=webapp-svc', answer: 'kubectl expose deployment webapp --port=80 --name=webapp-svc', validate: (c) => c.resources.some(r => r.type === 'service' && r.name === 'webapp-svc') },
+    ],
+  },
+
+  // ── CKAD LAB: ConfigMap & Secret Injection ──
+  {
+    id: 'ckad-lab-config-injection',
+    title: 'Lab: ConfigMap & Secret Injection',
+    category: 'CKAD Labs',
+    course: 'ckad',
+    content: `
+<h2>🧪 Lab: ConfigMap & Secret Injection</h2>
+<p>This lab focuses on injecting configuration and secrets into pods — a core CKAD skill.</p>
+
+<h3>Scenario</h3>
+<p>You are configuring a multi-environment application. Create the necessary configuration resources, secrets, and a namespace to organize everything.</p>
+<ol>
+  <li>Create namespace <code>staging</code></li>
+  <li>Create configmap <code>db-config</code> with <code>DB_HOST=postgres</code></li>
+  <li>Create configmap <code>app-settings</code> with <code>CACHE_TTL=300</code></li>
+  <li>Create secret <code>db-password</code> with <code>password=supersecret</code></li>
+  <li>Run pod <code>config-reader</code> with busybox</li>
+</ol>
+`,
+    example: 'kubectl create namespace staging',
+    challenges: [
+      { id: 'ckad-lab-ci-1', task: 'Create namespace "staging"', hint: 'kubectl create namespace staging', answer: 'kubectl create namespace staging', validate: (c) => c.resources.some(r => r.type === 'namespace' && r.name === 'staging') },
+      { id: 'ckad-lab-ci-2', task: 'Create configmap "db-config" with DB_HOST=postgres', hint: 'kubectl create configmap db-config --from-literal=DB_HOST=postgres', answer: 'kubectl create configmap db-config --from-literal=DB_HOST=postgres', validate: (c) => c.resources.some(r => r.type === 'configmap' && r.name === 'db-config') },
+      { id: 'ckad-lab-ci-3', task: 'Create configmap "app-settings" with CACHE_TTL=300', hint: 'kubectl create configmap app-settings --from-literal=CACHE_TTL=300', answer: 'kubectl create configmap app-settings --from-literal=CACHE_TTL=300', validate: (c) => c.resources.some(r => r.type === 'configmap' && r.name === 'app-settings') },
+      { id: 'ckad-lab-ci-4', task: 'Create secret "db-password" with password=supersecret', hint: 'kubectl create secret generic db-password --from-literal=password=supersecret', answer: 'kubectl create secret generic db-password --from-literal=password=supersecret', validate: (c) => c.resources.some(r => r.type === 'secret' && r.name === 'db-password') },
+      { id: 'ckad-lab-ci-5', task: 'Run pod "config-reader" with busybox', hint: 'kubectl run config-reader --image=busybox', answer: 'kubectl run config-reader --image=busybox', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'config-reader') },
+    ],
+  },
+
+  // ── CKAD LAB: Job & CronJob Pipeline ──
+  {
+    id: 'ckad-lab-job-pipeline',
+    title: 'Lab: Job & CronJob Pipeline',
+    category: 'CKAD Labs',
+    course: 'ckad',
+    content: `
+<h2>🧪 Lab: Job & CronJob Pipeline</h2>
+<p>This lab tests your ability to build batch processing pipelines using Jobs and CronJobs.</p>
+
+<h3>Scenario</h3>
+<p>You are building a data processing pipeline. Set up a namespace, create batch jobs for ETL tasks, schedule recurring cleanup, and store job configuration.</p>
+<ol>
+  <li>Create namespace <code>batch</code></li>
+  <li>Create job <code>etl-extract</code> using busybox</li>
+  <li>Create job <code>etl-transform</code> using busybox</li>
+  <li>Create cronjob <code>cleanup</code> that runs every hour</li>
+  <li>Create configmap <code>pipeline-config</code> with <code>BATCH_SIZE=100</code></li>
+</ol>
+`,
+    example: 'kubectl create namespace batch',
+    challenges: [
+      { id: 'ckad-lab-jp-1', task: 'Create namespace "batch"', hint: 'kubectl create namespace batch', answer: 'kubectl create namespace batch', validate: (c) => c.resources.some(r => r.type === 'namespace' && r.name === 'batch') },
+      { id: 'ckad-lab-jp-2', task: 'Create job "etl-extract" using busybox', hint: 'kubectl create job etl-extract --image=busybox -- echo extract', answer: 'kubectl create job etl-extract --image=busybox -- echo extract', validate: (c) => c.resources.some(r => r.type === 'job' && r.name === 'etl-extract') },
+      { id: 'ckad-lab-jp-3', task: 'Create job "etl-transform" using busybox', hint: 'kubectl create job etl-transform --image=busybox -- echo transform', answer: 'kubectl create job etl-transform --image=busybox -- echo transform', validate: (c) => c.resources.some(r => r.type === 'job' && r.name === 'etl-transform') },
+      { id: 'ckad-lab-jp-4', task: 'Create cronjob "cleanup" running every hour', hint: 'kubectl create cronjob cleanup --image=busybox --schedule="0 * * * *" -- echo cleanup', answer: 'kubectl create cronjob cleanup --image=busybox --schedule="0 * * * *" -- echo cleanup', validate: (c) => c.resources.some(r => r.type === 'cronjob' && r.name === 'cleanup') },
+      { id: 'ckad-lab-jp-5', task: 'Create configmap "pipeline-config" with BATCH_SIZE=100', hint: 'kubectl create configmap pipeline-config --from-literal=BATCH_SIZE=100', answer: 'kubectl create configmap pipeline-config --from-literal=BATCH_SIZE=100', validate: (c) => c.resources.some(r => r.type === 'configmap' && r.name === 'pipeline-config') },
+    ],
+  },
+
+  // ── CKAD LAB: Service Mesh Basics ──
+  {
+    id: 'ckad-lab-service-mesh',
+    title: 'Lab: Service Mesh Basics',
+    category: 'CKAD Labs',
+    course: 'ckad',
+    content: `
+<h2>🧪 Lab: Service Mesh Basics</h2>
+<p>This lab simulates building a microservices architecture with multiple deployments, services, and ingress routing.</p>
+
+<h3>Scenario</h3>
+<p>You are deploying a three-tier application: frontend, backend API, and database. Each tier needs its own deployment, service, and an ingress to route external traffic.</p>
+<ol>
+  <li>Create deployment <code>frontend</code> with nginx and 2 replicas</li>
+  <li>Create deployment <code>backend-api</code> with nginx and 2 replicas</li>
+  <li>Create deployment <code>database</code> with postgres and 1 replica</li>
+  <li>Expose frontend as service <code>frontend-svc</code> on port 80</li>
+  <li>Expose backend-api as service <code>backend-api-svc</code> on port 80</li>
+  <li>Create ingress <code>app-ingress</code> routing to frontend</li>
+</ol>
+`,
+    example: 'kubectl create deployment frontend --image=nginx --replicas=2',
+    challenges: [
+      { id: 'ckad-lab-sm-1', task: 'Create deployment "frontend" with 2 replicas', hint: 'kubectl create deployment frontend --image=nginx --replicas=2', answer: 'kubectl create deployment frontend --image=nginx --replicas=2', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'frontend') },
+      { id: 'ckad-lab-sm-2', task: 'Create deployment "backend-api" with 2 replicas', hint: 'kubectl create deployment backend-api --image=nginx --replicas=2', answer: 'kubectl create deployment backend-api --image=nginx --replicas=2', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'backend-api') },
+      { id: 'ckad-lab-sm-3', task: 'Create deployment "database" with postgres', hint: 'kubectl create deployment database --image=postgres --replicas=1', answer: 'kubectl create deployment database --image=postgres --replicas=1', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'database') },
+      { id: 'ckad-lab-sm-4', task: 'Expose frontend as "frontend-svc" on port 80', hint: 'kubectl expose deployment frontend --port=80 --name=frontend-svc', answer: 'kubectl expose deployment frontend --port=80 --name=frontend-svc', validate: (c) => c.resources.some(r => r.type === 'service' && r.name === 'frontend-svc') },
+      { id: 'ckad-lab-sm-5', task: 'Expose backend-api as "backend-api-svc" on port 80', hint: 'kubectl expose deployment backend-api --port=80 --name=backend-api-svc', answer: 'kubectl expose deployment backend-api --port=80 --name=backend-api-svc', validate: (c) => c.resources.some(r => r.type === 'service' && r.name === 'backend-api-svc') },
+      { id: 'ckad-lab-sm-6', task: 'Create ingress "app-ingress"', hint: 'kubectl create ingress app-ingress --rule="myapp.com/=frontend-svc:80"', answer: 'kubectl create ingress app-ingress --rule="myapp.com/=frontend-svc:80"', validate: (c) => c.resources.some(r => r.type === 'ingress' && r.name === 'app-ingress') },
+    ],
+  },
+
+  // ── CKAD LAB: Pod Security ──
+  {
+    id: 'ckad-lab-pod-security',
+    title: 'Lab: Pod Security',
+    category: 'CKAD Labs',
+    course: 'ckad',
+    content: `
+<h2>🧪 Lab: Pod Security</h2>
+<p>This lab focuses on securing pods with service accounts, RBAC roles, and role bindings.</p>
+
+<h3>Scenario</h3>
+<p>You need to set up least-privilege access for an application. Create a dedicated service account, define a restricted role, bind it, and run the application pod.</p>
+<ol>
+  <li>Create service account <code>secure-sa</code></li>
+  <li>Create role <code>pod-reader</code> with get/list permissions on pods</li>
+  <li>Create rolebinding <code>secure-binding</code> binding pod-reader to secure-sa</li>
+  <li>Run pod <code>secure-app</code> with nginx</li>
+  <li>Run pod <code>audit-logger</code> with busybox</li>
+</ol>
+`,
+    example: 'kubectl create serviceaccount secure-sa',
+    challenges: [
+      { id: 'ckad-lab-ps-1', task: 'Create service account "secure-sa"', hint: 'kubectl create serviceaccount secure-sa', answer: 'kubectl create serviceaccount secure-sa', validate: (c) => c.resources.some(r => r.type === 'serviceaccount' && r.name === 'secure-sa') },
+      { id: 'ckad-lab-ps-2', task: 'Create role "pod-reader" with get,list on pods', hint: 'kubectl create role pod-reader --verb=get,list --resource=pods', answer: 'kubectl create role pod-reader --verb=get,list --resource=pods', validate: (c) => c.resources.some(r => r.type === 'role' && r.name === 'pod-reader') },
+      { id: 'ckad-lab-ps-3', task: 'Create rolebinding "secure-binding" binding pod-reader to secure-sa', hint: 'kubectl create rolebinding secure-binding --role=pod-reader --serviceaccount=default:secure-sa', answer: 'kubectl create rolebinding secure-binding --role=pod-reader --serviceaccount=default:secure-sa', validate: (c) => c.resources.some(r => r.type === 'rolebinding' && r.name === 'secure-binding') },
+      { id: 'ckad-lab-ps-4', task: 'Run pod "secure-app" with nginx', hint: 'kubectl run secure-app --image=nginx', answer: 'kubectl run secure-app --image=nginx', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'secure-app') },
+      { id: 'ckad-lab-ps-5', task: 'Run pod "audit-logger" with busybox', hint: 'kubectl run audit-logger --image=busybox', answer: 'kubectl run audit-logger --image=busybox', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'audit-logger') },
+    ],
+  },
+
+  // ── CKAD LAB: Canary Deployment ──
+  {
+    id: 'ckad-lab-canary',
+    title: 'Lab: Canary Deployment',
+    category: 'CKAD Labs',
+    course: 'ckad',
+    content: `
+<h2>🧪 Lab: Canary Deployment</h2>
+<p>This lab tests the canary deployment pattern — running a small new version alongside the stable version.</p>
+
+<h3>Scenario</h3>
+<p>You are rolling out a new version of your web app. Deploy the stable version, deploy a canary with the same labels, create a service that selects both, then scale the canary up once validated.</p>
+<ol>
+  <li>Create deployment <code>web-stable</code> with nginx:1.24, 4 replicas, and label <code>app=web</code></li>
+  <li>Create deployment <code>web-canary</code> with nginx:1.25, 1 replica, and label <code>app=web</code></li>
+  <li>Create service <code>web-svc</code> selecting <code>app=web</code> on port 80</li>
+  <li>Scale <code>web-canary</code> to 2 replicas</li>
+</ol>
+`,
+    example: 'kubectl create deployment web-stable --image=nginx:1.24 --replicas=4',
+    challenges: [
+      { id: 'ckad-lab-cn-1', task: 'Create deployment "web-stable" with nginx:1.24 and 4 replicas', hint: 'kubectl create deployment web-stable --image=nginx:1.24 --replicas=4', answer: 'kubectl create deployment web-stable --image=nginx:1.24 --replicas=4', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'web-stable') },
+      { id: 'ckad-lab-cn-2', task: 'Create deployment "web-canary" with nginx:1.25 and 1 replica', hint: 'kubectl create deployment web-canary --image=nginx:1.25 --replicas=1', answer: 'kubectl create deployment web-canary --image=nginx:1.25 --replicas=1', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'web-canary') },
+      { id: 'ckad-lab-cn-3', task: 'Create service "web-svc" on port 80', hint: 'kubectl create service clusterip web-svc --tcp=80:80', answer: 'kubectl create service clusterip web-svc --tcp=80:80', validate: (c) => c.resources.some(r => r.type === 'service' && r.name === 'web-svc') },
+      { id: 'ckad-lab-cn-4', task: 'Scale web-canary to 2 replicas', hint: 'kubectl scale deployment web-canary --replicas=2', answer: 'kubectl scale deployment web-canary --replicas=2', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'web-canary' && r.metadata?.replicas === 2) },
+    ],
+  },
+
+  // ── CKAD LAB: Debugging & Troubleshooting ──
+  {
+    id: 'ckad-lab-debugging',
+    title: 'Lab: Debugging & Troubleshooting',
+    category: 'CKAD Labs',
+    course: 'ckad',
+    content: `
+<h2>🧪 Lab: Debugging & Troubleshooting</h2>
+<p>This lab simulates a debugging scenario where you must identify and work around broken pods.</p>
+
+<h3>Scenario</h3>
+<p>A team deployed several pods but some are failing. Run a broken pod, run a working replacement, create a service, and use describe to investigate.</p>
+<ol>
+  <li>Run pod <code>broken-app</code> with image <code>nginx:nonexistent</code> (will fail)</li>
+  <li>Run pod <code>working-app</code> with nginx</li>
+  <li>Describe the broken pod to check events</li>
+  <li>Create service <code>app-svc</code> on port 80</li>
+  <li>Run pod <code>debug-tools</code> with busybox for troubleshooting</li>
+</ol>
+`,
+    example: 'kubectl run broken-app --image=nginx:nonexistent',
+    challenges: [
+      { id: 'ckad-lab-db-1', task: 'Run pod "broken-app" with nginx:nonexistent', hint: 'kubectl run broken-app --image=nginx:nonexistent', answer: 'kubectl run broken-app --image=nginx:nonexistent', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'broken-app') },
+      { id: 'ckad-lab-db-2', task: 'Run pod "working-app" with nginx', hint: 'kubectl run working-app --image=nginx', answer: 'kubectl run working-app --image=nginx', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'working-app') },
+      { id: 'ckad-lab-db-3', task: 'Describe the broken-app pod', hint: 'kubectl describe pod broken-app', answer: 'kubectl describe pod broken-app', validate: () => true },
+      { id: 'ckad-lab-db-4', task: 'Create service "app-svc" on port 80', hint: 'kubectl create service clusterip app-svc --tcp=80:80', answer: 'kubectl create service clusterip app-svc --tcp=80:80', validate: (c) => c.resources.some(r => r.type === 'service' && r.name === 'app-svc') },
+      { id: 'ckad-lab-db-5', task: 'Run pod "debug-tools" with busybox', hint: 'kubectl run debug-tools --image=busybox', answer: 'kubectl run debug-tools --image=busybox', validate: (c) => c.resources.some(r => r.type === 'pod' && r.name === 'debug-tools') },
+    ],
+  },
+
+  // ── CKAD LAB: Namespace Isolation ──
+  {
+    id: 'ckad-lab-namespace-isolation',
+    title: 'Lab: Namespace Isolation',
+    category: 'CKAD Labs',
+    course: 'ckad',
+    content: `
+<h2>🧪 Lab: Namespace Isolation</h2>
+<p>This lab tests your ability to organize resources across multiple namespaces with isolated configuration.</p>
+
+<h3>Scenario</h3>
+<p>You are setting up isolated environments for two teams. Each team gets its own namespace, deployment, service, configmap, and secret.</p>
+<ol>
+  <li>Create namespace <code>team-alpha</code></li>
+  <li>Create namespace <code>team-beta</code></li>
+  <li>Create deployment <code>alpha-app</code> with nginx</li>
+  <li>Create deployment <code>beta-app</code> with nginx</li>
+  <li>Create service <code>alpha-svc</code> on port 80</li>
+  <li>Create configmap <code>alpha-config</code> with <code>TEAM=alpha</code></li>
+  <li>Create secret <code>beta-secret</code> with <code>key=betakey</code></li>
+</ol>
+`,
+    example: 'kubectl create namespace team-alpha',
+    challenges: [
+      { id: 'ckad-lab-ns-1', task: 'Create namespace "team-alpha"', hint: 'kubectl create namespace team-alpha', answer: 'kubectl create namespace team-alpha', validate: (c) => c.resources.some(r => r.type === 'namespace' && r.name === 'team-alpha') },
+      { id: 'ckad-lab-ns-2', task: 'Create namespace "team-beta"', hint: 'kubectl create namespace team-beta', answer: 'kubectl create namespace team-beta', validate: (c) => c.resources.some(r => r.type === 'namespace' && r.name === 'team-beta') },
+      { id: 'ckad-lab-ns-3', task: 'Create deployment "alpha-app" with nginx', hint: 'kubectl create deployment alpha-app --image=nginx', answer: 'kubectl create deployment alpha-app --image=nginx', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'alpha-app') },
+      { id: 'ckad-lab-ns-4', task: 'Create deployment "beta-app" with nginx', hint: 'kubectl create deployment beta-app --image=nginx', answer: 'kubectl create deployment beta-app --image=nginx', validate: (c) => c.resources.some(r => r.type === 'deployment' && r.name === 'beta-app') },
+      { id: 'ckad-lab-ns-5', task: 'Create service "alpha-svc" on port 80', hint: 'kubectl create service clusterip alpha-svc --tcp=80:80', answer: 'kubectl create service clusterip alpha-svc --tcp=80:80', validate: (c) => c.resources.some(r => r.type === 'service' && r.name === 'alpha-svc') },
+      { id: 'ckad-lab-ns-6', task: 'Create configmap "alpha-config" with TEAM=alpha', hint: 'kubectl create configmap alpha-config --from-literal=TEAM=alpha', answer: 'kubectl create configmap alpha-config --from-literal=TEAM=alpha', validate: (c) => c.resources.some(r => r.type === 'configmap' && r.name === 'alpha-config') },
+      { id: 'ckad-lab-ns-7', task: 'Create secret "beta-secret" with key=betakey', hint: 'kubectl create secret generic beta-secret --from-literal=key=betakey', answer: 'kubectl create secret generic beta-secret --from-literal=key=betakey', validate: (c) => c.resources.some(r => r.type === 'secret' && r.name === 'beta-secret') },
+    ],
+  },
 ];
