@@ -2,10 +2,10 @@ import { useState, useCallback, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import LessonContent from './components/LessonContent';
 import InteractivePanel from './components/InteractivePanel';
-import { lessons } from './lessons';
+import { allLessons, getLessonsForCourse } from './lessons';
 import { parseAndExecute } from './clusterState';
 import type { ClusterState } from './clusterState';
-import type { UserProgress } from './types';
+import type { UserProgress, CourseId } from './types';
 
 const STORAGE_KEY = 'k8s-academy-progress';
 
@@ -28,11 +28,12 @@ function loadProgress(): UserProgress {
       return {
         completedLessons: parsed.completedLessons || [],
         completedChallenges: parsed.completedChallenges || [],
-        currentLesson: parsed.currentLesson || lessons[0].id,
+        currentLesson: parsed.currentLesson || allLessons[0].id,
+        currentCourse: parsed.currentCourse || 'kcna',
       };
     }
   } catch { /* ignore */ }
-  return { completedLessons: [], completedChallenges: [], currentLesson: lessons[0].id };
+  return { completedLessons: [], completedChallenges: [], currentLesson: allLessons[0].id, currentCourse: 'kcna' };
 }
 
 function saveProgress(progress: UserProgress) {
@@ -45,8 +46,9 @@ export default function App() {
   const [activeContext, setActiveContext] = useState('k8s-simulator');
   const cluster = clusters[activeContext] || makeInitialCluster();
   const [activeTab, setActiveTab] = useState<'learn' | 'practice'>('learn');
-  const currentLesson = lessons.find(l => l.id === progress.currentLesson) || lessons[0];
-  const currentIdx = lessons.findIndex(l => l.id === currentLesson.id);
+  const courseLessons = getLessonsForCourse(progress.currentCourse);
+  const currentLesson = courseLessons.find(l => l.id === progress.currentLesson) || courseLessons[0];
+  const currentIdx = courseLessons.findIndex(l => l.id === currentLesson.id);
 
   useEffect(() => {
     setClusters(prev => ({ ...prev, [activeContext]: makeInitialCluster() }));
@@ -59,6 +61,14 @@ export default function App() {
       return next;
     });
   }, []);
+
+  const switchCourse = useCallback((course: CourseId) => {
+    const firstLesson = getLessonsForCourse(course)[0];
+    updateProgress({ currentCourse: course, currentLesson: firstLesson.id });
+    setActiveTab('learn');
+    setClusters({ 'k8s-simulator': makeInitialCluster() });
+    setActiveContext('k8s-simulator');
+  }, [updateProgress]);
 
   const selectLesson = useCallback((id: string) => {
     updateProgress({ currentLesson: id });
@@ -73,12 +83,12 @@ export default function App() {
   }, [progress, currentLesson, updateProgress]);
 
   const goNext = useCallback(() => {
-    if (currentIdx < lessons.length - 1) selectLesson(lessons[currentIdx + 1].id);
-  }, [currentIdx, selectLesson]);
+    if (currentIdx < courseLessons.length - 1) selectLesson(courseLessons[currentIdx + 1].id);
+  }, [currentIdx, selectLesson, courseLessons]);
 
   const goPrev = useCallback(() => {
-    if (currentIdx > 0) selectLesson(lessons[currentIdx - 1].id);
-  }, [currentIdx, selectLesson]);
+    if (currentIdx > 0) selectLesson(courseLessons[currentIdx - 1].id);
+  }, [currentIdx, selectLesson, courseLessons]);
 
   const handleCommand = useCallback((cmd: string) => {
     const contextInfo = { active: activeContext, available: Object.keys(clusters) };
@@ -101,13 +111,14 @@ export default function App() {
   }, [cluster, activeContext, clusters]);
 
   const resetProgress = useCallback(() => {
-    const fresh: UserProgress = { completedLessons: [], completedChallenges: [], currentLesson: lessons[0].id };
+    const firstLesson = getLessonsForCourse(progress.currentCourse)[0];
+    const fresh: UserProgress = { completedLessons: [], completedChallenges: [], currentLesson: firstLesson.id, currentCourse: progress.currentCourse };
     setProgress(fresh);
     saveProgress(fresh);
     setClusters({ 'k8s-simulator': makeInitialCluster() });
     setActiveContext('k8s-simulator');
     setActiveTab('learn');
-  }, []);
+  }, [progress.currentCourse]);
 
   const hasPractice = !!currentLesson.example;
   const challengesDone = currentLesson.challenges
@@ -121,6 +132,7 @@ export default function App() {
         progress={progress}
         onSelectLesson={selectLesson}
         onResetProgress={resetProgress}
+        onSwitchCourse={switchCourse}
       />
 
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
@@ -168,7 +180,7 @@ export default function App() {
               onMarkComplete={markComplete}
               onNext={goNext}
               onPrev={goPrev}
-              hasNext={currentIdx < lessons.length - 1}
+              hasNext={currentIdx < courseLessons.length - 1}
               hasPrev={currentIdx > 0}
               cluster={cluster}
               onSwitchToPractice={() => setActiveTab('practice')}

@@ -1,4 +1,7 @@
 import type { Lesson } from './types';
+import type { CourseId } from './types';
+import { ckaLessons } from './ckaLessons';
+import { ckadLessons } from './ckadLessons';
 
 export const lessons: Lesson[] = [
   // ── KUBERNETES FUNDAMENTALS ──
@@ -6,6 +9,7 @@ export const lessons: Lesson[] = [
     id: 'what-is-k8s',
     title: 'What is Kubernetes?',
     category: 'Kubernetes Fundamentals',
+    course: 'kcna',
     content: `
 <h2>What is Kubernetes?</h2>
 <p>Kubernetes (K8s) is an open-source <strong>container orchestration platform</strong> originally developed by Google. It automates the deployment, scaling, and management of containerized applications.</p>
@@ -57,6 +61,7 @@ kubectl get all</code></pre>
     id: 'cluster-architecture',
     title: 'Cluster Architecture',
     category: 'Kubernetes Fundamentals',
+    course: 'kcna',
     content: `
 <h2>Cluster Architecture</h2>
 <p>A Kubernetes cluster consists of a <strong>Control Plane</strong> and one or more <strong>Worker Nodes</strong>.</p>
@@ -112,6 +117,7 @@ kubectl get pods</code></pre>
     id: 'container-runtimes',
     title: 'Container Runtimes & OCI',
     category: 'Kubernetes Fundamentals',
+    course: 'kcna',
     content: `
 <h2>🐳 Container Runtimes & OCI Standards</h2>
 <p>Kubernetes doesn't run containers directly — it delegates to a <strong>container runtime</strong> via the <strong>Container Runtime Interface (CRI)</strong>.</p>
@@ -208,6 +214,7 @@ nginx@sha256:abc123...</code></pre>
     id: 'pods',
     title: 'Pods',
     category: 'Kubernetes Fundamentals',
+    course: 'kcna',
     content: `
 <h2>Pods</h2>
 <p>A <strong>Pod</strong> is the smallest deployable unit in Kubernetes. It represents a single instance of a running process in your cluster.</p>
@@ -280,6 +287,7 @@ kubectl delete pod temp</code></pre>
     id: 'deployments',
     title: 'Deployments',
     category: 'Kubernetes Fundamentals',
+    course: 'kcna',
     content: `
 <h2>Deployments</h2>
 <p>A <strong>Deployment</strong> provides declarative updates for Pods and ReplicaSets. You describe a desired state, and the Deployment controller changes the actual state to match.</p>
@@ -353,6 +361,7 @@ kubectl rollout restart deployment/webapp</code></pre>
     id: 'statefulsets',
     title: 'StatefulSets',
     category: 'Kubernetes Fundamentals',
+    course: 'kcna',
     content: `
 <h2>StatefulSets</h2>
 <p>A <strong>StatefulSet</strong> manages stateful applications. Unlike Deployments, StatefulSets provide guarantees about the <strong>ordering and uniqueness</strong> of Pods.</p>
@@ -419,6 +428,7 @@ kubectl scale statefulset/mysql --replicas=2</code></pre>
     id: 'daemonsets',
     title: 'DaemonSets',
     category: 'Kubernetes Fundamentals',
+    course: 'kcna',
     content: `
 <h2>DaemonSets</h2>
 <p>A <strong>DaemonSet</strong> ensures that <strong>all (or some) nodes</strong> run a copy of a Pod. When nodes are added to the cluster, Pods are added to them. When nodes are removed, those Pods are garbage collected.</p>
@@ -476,6 +486,7 @@ kubectl get daemonsets</code></pre>
     id: 'jobs-cronjobs',
     title: 'Jobs & CronJobs',
     category: 'Kubernetes Fundamentals',
+    course: 'kcna',
     content: `
 <h2>Jobs & CronJobs</h2>
 
@@ -546,6 +557,7 @@ kubectl get cronjobs</code></pre>
     id: 'namespaces',
     title: 'Namespaces',
     category: 'Kubernetes Fundamentals',
+    course: 'kcna',
     content: `
 <h2>Namespaces</h2>
 <p><strong>Namespaces</strong> divide cluster resources between multiple users or teams. They're like virtual clusters within a physical cluster.</p>
@@ -621,6 +633,7 @@ kubectl get all -A</code></pre>
     id: 'configmaps-secrets',
     title: 'ConfigMaps & Secrets',
     category: 'Kubernetes Fundamentals',
+    course: 'kcna',
     content: `
 <h2>ConfigMaps & Secrets</h2>
 
@@ -697,6 +710,7 @@ kubectl describe secret db-creds</code></pre>
     id: 'scheduling',
     title: 'Scheduling: Taints, Tolerations & Affinity',
     category: 'Kubernetes Fundamentals',
+    course: 'kcna',
     content: `
 <h2>📅 Scheduling: Taints, Tolerations & Node Affinity</h2>
 <p>Kubernetes scheduling determines <strong>which node</strong> a Pod runs on. The scheduler considers resource requests, node selectors, taints/tolerations, and affinity rules.</p>
@@ -796,6 +810,7 @@ kubectl taint nodes node-2 gpu=true:NoSchedule</code></pre>
     id: 'services',
     title: 'Services',
     category: 'Container Orchestration',
+    course: 'kcna',
     content: `
 <h2>Services</h2>
 <p>A <strong>Service</strong> provides stable networking for ephemeral Pods. Pods get new IPs when recreated — Services give you a <strong>stable IP and DNS name</strong>.</p>
@@ -868,6 +883,7 @@ kubectl get services</code></pre>
     id: 'ingress',
     title: 'Ingress',
     category: 'Container Orchestration',
+    course: 'kcna',
     content: `
 <h2>Ingress</h2>
 <p>An <strong>Ingress</strong> manages external HTTP/HTTPS access to services in a cluster. It provides load balancing, SSL termination, and name-based virtual hosting.</p>
@@ -932,6 +948,7 @@ kubectl get ingress</code></pre>
     id: 'network-policies',
     title: 'Network Policies',
     category: 'Container Orchestration',
+    course: 'kcna',
     content: `
 <h2>Network Policies</h2>
 <p><strong>NetworkPolicies</strong> control traffic flow between Pods at the IP/port level (OSI Layer 3-4). By default, all Pods can communicate with all other Pods — NetworkPolicies restrict this.</p>
@@ -1011,6 +1028,7 @@ kubectl get networkpolicies</code></pre>
     id: 'persistent-volumes',
     title: 'Persistent Volumes',
     category: 'Container Orchestration',
+    course: 'kcna',
     content: `
 <h2>Persistent Volumes & Claims</h2>
 <p>Kubernetes storage abstracts the details of <em>how</em> storage is provided from <em>how</em> it is consumed.</p>
@@ -1090,6 +1108,7 @@ kubectl describe pv my-pv</code></pre>
     id: 'rbac',
     title: 'RBAC & Service Accounts',
     category: 'Container Orchestration',
+    course: 'kcna',
     content: `
 <h2>RBAC (Role-Based Access Control)</h2>
 <p>RBAC controls <strong>who</strong> can do <strong>what</strong> on <strong>which resources</strong> in your cluster.</p>
@@ -1164,6 +1183,7 @@ kubectl auth can-i delete nodes</code></pre>
     id: 'pod-security-probes',
     title: 'Pod Security & Probes',
     category: 'Container Orchestration',
+    course: 'kcna',
     content: `
 <h2>🛡️ Pod Security & Health Probes</h2>
 <p>Kubernetes provides mechanisms to secure Pods and monitor their health through <strong>Security Contexts</strong>, <strong>Pod Security Standards</strong>, and <strong>health probes</strong>.</p>
@@ -1269,6 +1289,7 @@ kubectl get pods</code></pre>
     id: 'helm',
     title: 'Helm: The Package Manager',
     category: 'Cloud Native App Delivery',
+    course: 'kcna',
     content: `
 <h2>🚢 Helm: The Kubernetes Package Manager</h2>
 <p>Helm is the most popular <strong>package manager for Kubernetes</strong>. It simplifies deploying complex applications by packaging Kubernetes manifests into reusable <strong>charts</strong>.</p>
@@ -1357,6 +1378,7 @@ helm template my-release bitnami/nginx</code></pre>
     id: 'gitops-cicd',
     title: 'GitOps & CI/CD',
     category: 'Cloud Native App Delivery',
+    course: 'kcna',
     content: `
 <h2>🚢 GitOps & CI/CD for Kubernetes</h2>
 <p><strong>GitOps</strong> is a set of practices where Git is the single source of truth for declarative infrastructure and applications. Changes are made via pull requests, and an operator automatically syncs the cluster to match the Git state.</p>
@@ -1458,6 +1480,7 @@ spec:
     id: 'observability',
     title: 'Observability: Metrics, Logs & Traces',
     category: 'Cloud Native Architecture',
+    course: 'kcna',
     content: `
 <h2>📊 Observability: Metrics, Logs & Traces</h2>
 <p>Observability is the ability to understand the internal state of a system from its external outputs. In cloud native systems, this is built on <strong>three pillars</strong>: metrics, logs, and traces.</p>
@@ -1548,6 +1571,7 @@ kubectl get events --sort-by='.lastTimestamp'</code></pre>
     id: 'cloud-native',
     title: 'Cloud Native Concepts',
     category: 'Cloud Native Architecture',
+    course: 'kcna',
     content: `
 <h2>Cloud Native Concepts</h2>
 <p>The <strong>Cloud Native Computing Foundation (CNCF)</strong> defines cloud native technologies as those that empower organizations to build and run scalable applications in modern, dynamic environments.</p>
@@ -1590,6 +1614,7 @@ kubectl get events --sort-by='.lastTimestamp'</code></pre>
     id: 'container-orchestration',
     title: 'Container Orchestration',
     category: 'Cloud Native Architecture',
+    course: 'kcna',
     content: `
 <h2>Container Orchestration</h2>
 <p><strong>Container orchestration</strong> automates the deployment, management, scaling, and networking of containers across a cluster of machines.</p>
@@ -1628,6 +1653,7 @@ kubectl get events --sort-by='.lastTimestamp'</code></pre>
     id: 'service-mesh',
     title: 'Service Mesh',
     category: 'Cloud Native Architecture',
+    course: 'kcna',
     content: `
 <h2>🕸️ Service Mesh</h2>
 <p>A <strong>service mesh</strong> is a dedicated infrastructure layer for managing service-to-service communication. It handles traffic management, security, and observability without changing application code.</p>
@@ -1722,6 +1748,7 @@ spec:
     id: 'lab-deploy-expose',
     title: 'Lab: Deploy & Expose an App',
     category: 'Interview Labs',
+    course: 'kcna',
     content: `
 <h2>🧪 Lab: Deploy & Expose a Full Application</h2>
 <p>This is a common interview scenario: <em>"Deploy a web application with 3 replicas and make it accessible via a service."</em></p>
@@ -1776,6 +1803,7 @@ kubectl get services</code></pre>
     id: 'lab-rolling-update',
     title: 'Lab: Rolling Update & Rollback',
     category: 'Interview Labs',
+    course: 'kcna',
     content: `
 <h2>🧪 Lab: Rolling Update & Rollback</h2>
 <p>Classic interview question: <em>"Update an application to a new version, then roll it back when the new version has issues."</em></p>
@@ -1837,6 +1865,7 @@ kubectl rollout status deployment/api</code></pre>
     id: 'lab-multi-namespace',
     title: 'Lab: Multi-Namespace Setup',
     category: 'Interview Labs',
+    course: 'kcna',
     content: `
 <h2>🧪 Lab: Multi-Namespace Environment</h2>
 <p>Interview scenario: <em>"Set up a development and production environment using namespaces with isolated resources."</em></p>
@@ -1900,6 +1929,7 @@ kubectl get all -n prod</code></pre>
     id: 'lab-troubleshoot-app',
     title: 'Lab: Troubleshoot a Broken App',
     category: 'Interview Labs',
+    course: 'kcna',
     content: `
 <h2>🧪 Lab: Troubleshoot a Broken Application</h2>
 <p>Interview scenario: <em>"An application isn't working. Diagnose and fix it."</em></p>
@@ -1969,6 +1999,7 @@ kubectl get secrets -n app</code></pre>
     id: 'lab-scaling-strategy',
     title: 'Lab: Scaling Strategy',
     category: 'Interview Labs',
+    course: 'kcna',
     content: `
 <h2>🧪 Lab: Scaling Strategy</h2>
 <p>Interview scenario: <em>"Your application is experiencing high traffic. Scale it appropriately and ensure high availability."</em></p>
@@ -2033,6 +2064,7 @@ kubectl scale deployment/worker --replicas=1</code></pre>
     id: 'lab-rbac-security',
     title: 'Lab: RBAC Security Setup',
     category: 'Interview Labs',
+    course: 'kcna',
     content: `
 <h2>🎯 Lab: RBAC Security Setup</h2>
 <p><strong>Interview Scenario:</strong> "Your team needs to give a new developer read-only access to pods in the production namespace, but they should NOT be able to delete or modify anything. Set up the RBAC resources to make this happen."</p>
@@ -2073,6 +2105,7 @@ kubectl auth can-i get pods</code></pre>
     id: 'lab-statefulset-storage',
     title: 'Lab: StatefulSet with Persistent Storage',
     category: 'Interview Labs',
+    course: 'kcna',
     content: `
 <h2>🎯 Lab: StatefulSet with Persistent Storage</h2>
 <p><strong>Interview Scenario:</strong> "You need to deploy a database (like PostgreSQL or MongoDB) that requires stable network identities and persistent storage. How would you set this up in Kubernetes?"</p>
@@ -2118,6 +2151,7 @@ kubectl create service postgres-headless --port=5432 --type=ClusterIP</code></pr
     id: 'lab-network-lockdown',
     title: 'Lab: Network Policy Lockdown',
     category: 'Interview Labs',
+    course: 'kcna',
     content: `
 <h2>🎯 Lab: Network Policy Lockdown</h2>
 <p><strong>Interview Scenario:</strong> "Your security team requires that the database pods should only accept traffic from the API pods, and nothing else. How would you implement this?"</p>
@@ -2155,6 +2189,7 @@ kubectl create networkpolicy deny-external --pod-selector=app=api</code></pre>
     id: 'lab-cronjob-batch',
     title: 'Lab: CronJob Batch Processing',
     category: 'Interview Labs',
+    course: 'kcna',
     content: `
 <h2>🎯 Lab: CronJob Batch Processing</h2>
 <p><strong>Interview Scenario:</strong> "You need to set up a nightly data cleanup job that runs every day, plus a one-time data migration job that processes 5 items in parallel. How would you configure this?"</p>
@@ -2190,6 +2225,7 @@ kubectl create job db-backup --image=postgres</code></pre>
     id: 'lab-daemonset-monitoring',
     title: 'Lab: DaemonSet Monitoring Agent',
     category: 'Interview Labs',
+    course: 'kcna',
     content: `
 <h2>🎯 Lab: DaemonSet Monitoring Agent</h2>
 <p><strong>Interview Scenario:</strong> "You need to deploy a log collector and a metrics agent on every node in the cluster. How would you ensure one copy runs on each node, even as new nodes are added?"</p>
@@ -2227,6 +2263,7 @@ kubectl get daemonsets</code></pre>
     id: 'lab-blue-green',
     title: 'Lab: Blue-Green Deployment',
     category: 'Interview Labs',
+    course: 'kcna',
     content: `
 <h2>🎯 Lab: Blue-Green Deployment</h2>
 <p><strong>Interview Scenario:</strong> "Explain and demonstrate a blue-green deployment strategy. You have a v1 of your app running and need to deploy v2 with zero downtime, with the ability to instantly roll back."</p>
@@ -2276,6 +2313,7 @@ kubectl label deployment app-green version=v2</code></pre>
     id: 'lab-microservices',
     title: 'Lab: Microservices Architecture',
     category: 'Interview Labs',
+    course: 'kcna',
     content: `
 <h2>🎯 Lab: Microservices Architecture</h2>
 <p><strong>Interview Scenario:</strong> "Design and deploy a 3-tier microservices application with a frontend, backend API, and database. Each tier should be independently scalable and have its own Service for discovery."</p>
@@ -2321,6 +2359,7 @@ kubectl scale deployment/api --replicas=5 -n microservices</code></pre>
     id: 'lab-config-secrets',
     title: 'Lab: Config & Secrets Management',
     category: 'Interview Labs',
+    course: 'kcna',
     content: `
 <h2>🎯 Lab: Config & Secrets Management</h2>
 <p><strong>Interview Scenario:</strong> "Your application needs database credentials and feature flags. How do you manage configuration and sensitive data in Kubernetes without hardcoding them in your container images?"</p>
@@ -2362,6 +2401,7 @@ kubectl create secret tls-cert</code></pre>
     id: 'lab-node-maintenance',
     title: 'Lab: Node Maintenance & Scheduling',
     category: 'Interview Labs',
+    course: 'kcna',
     content: `
 <h2>🎯 Lab: Node Maintenance & Scheduling</h2>
 <p><strong>Interview Scenario:</strong> "One of your worker nodes needs a kernel upgrade. How do you safely take it out of rotation, ensure workloads are moved to other nodes, perform maintenance, and bring it back?"</p>
@@ -2407,11 +2447,18 @@ kubectl label nodes node-2 tier=frontend</code></pre>
 
 export const categories = [...new Set(lessons.map(l => l.category))];
 
-export function getLessonsByCategory(): Record<string, Lesson[]> {
+export const allLessons: Lesson[] = [...lessons, ...ckaLessons, ...ckadLessons];
+
+export function getLessonsByCategory(course?: CourseId): Record<string, Lesson[]> {
   const map: Record<string, Lesson[]> = {};
-  for (const l of lessons) {
+  const filtered = course ? allLessons.filter(l => l.course === course) : allLessons;
+  for (const l of filtered) {
     if (!map[l.category]) map[l.category] = [];
     map[l.category].push(l);
   }
   return map;
+}
+
+export function getLessonsForCourse(course: CourseId): Lesson[] {
+  return allLessons.filter(l => l.course === course);
 }

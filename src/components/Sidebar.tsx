@@ -1,11 +1,13 @@
 import { getLessonsByCategory } from '../lessons';
-import type { UserProgress } from '../types';
+import type { UserProgress, CourseId } from '../types';
+import { courses } from '../types';
 
 interface SidebarProps {
   currentLessonId: string;
   progress: UserProgress;
   onSelectLesson: (id: string) => void;
   onResetProgress: () => void;
+  onSwitchCourse: (course: CourseId) => void;
 }
 
 const categoryIcons: Record<string, string> = {
@@ -14,10 +16,23 @@ const categoryIcons: Record<string, string> = {
   'Cloud Native App Delivery': '🚢',
   'Cloud Native Architecture': '☁️',
   'Interview Labs': '🎯',
+  'Cluster Setup': '🔧',
+  'Workloads & Scheduling': '📅',
+  'Services & Networking': '🌐',
+  'Storage': '💾',
+  'Troubleshooting': '🔍',
+  'CKA Labs': '🧪',
+  'App Design & Build': '🏗️',
+  'App Deployment': '🚀',
+  'App Config & Security': '🔐',
+  'Observability & Maintenance': '📊',
+  'CKAD Labs': '🧪',
 };
 
-export default function Sidebar({ currentLessonId, progress, onSelectLesson, onResetProgress }: SidebarProps) {
-  const grouped = getLessonsByCategory();
+export default function Sidebar({ currentLessonId, progress, onSelectLesson, onResetProgress, onSwitchCourse }: SidebarProps) {
+  const grouped = getLessonsByCategory(progress.currentCourse);
+  const allCourseLessons = Object.values(grouped).flat();
+  const courseCompletedCount = progress.completedLessons.filter(id => allCourseLessons.some(l => l.id === id)).length;
 
   return (
     <aside className="w-72 bg-gray-900 border-r border-gray-800 flex flex-col h-full overflow-hidden">
@@ -26,17 +41,39 @@ export default function Sidebar({ currentLessonId, progress, onSelectLesson, onR
           <span className="text-2xl">☸️</span>
           <div>
             <h1 className="text-base font-bold text-white">K8s Academy</h1>
-            <p className="text-xs text-gray-500">KCNA Study Guide</p>
           </div>
         </div>
-        <div className="mt-3 bg-gray-800 rounded-full h-2 overflow-hidden">
+
+        {/* Course selector tabs */}
+        <div className="mt-3 flex gap-1">
+          {courses.map(c => (
+            <button
+              key={c.id}
+              onClick={() => onSwitchCourse(c.id)}
+              className={`flex-1 px-2 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                progress.currentCourse === c.id
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200'
+              }`}
+              title={c.subtitle}
+            >
+              {c.icon} {c.name}
+            </button>
+          ))}
+        </div>
+
+        <p className="text-xs text-gray-500 mt-2">
+          {courses.find(c => c.id === progress.currentCourse)?.subtitle}
+        </p>
+
+        <div className="mt-2 bg-gray-800 rounded-full h-2 overflow-hidden">
           <div
             className="bg-indigo-500 h-full rounded-full transition-all duration-500"
-            style={{ width: `${(progress.completedLessons.length / Object.values(grouped).flat().length) * 100}%` }}
+            style={{ width: `${allCourseLessons.length ? (courseCompletedCount / allCourseLessons.length) * 100 : 0}%` }}
           />
         </div>
         <p className="text-xs text-gray-500 mt-1">
-          {progress.completedLessons.length} / {Object.values(grouped).flat().length} completed
+          {courseCompletedCount} / {allCourseLessons.length} completed
         </p>
       </div>
 

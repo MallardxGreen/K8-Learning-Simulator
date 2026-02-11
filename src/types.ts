@@ -8,10 +8,26 @@ export interface Challenge {
   validate: (cluster: ClusterState) => boolean;  // check cluster state
 }
 
+export type CourseId = 'kcna' | 'cka' | 'ckad';
+
+export interface CourseInfo {
+  id: CourseId;
+  name: string;
+  subtitle: string;
+  icon: string;
+}
+
+export const courses: CourseInfo[] = [
+  { id: 'kcna', name: 'KCNA', subtitle: 'Cloud Native Associate', icon: '☸️' },
+  { id: 'cka', name: 'CKA', subtitle: 'Certified K8s Admin', icon: '🛠️' },
+  { id: 'ckad', name: 'CKAD', subtitle: 'App Developer', icon: '💻' },
+];
+
 export interface Lesson {
   id: string;
   title: string;
   category: string;
+  course: CourseId;
   content: string;
   example?: string;
   expectedCommands?: string[];
@@ -39,4 +55,5 @@ export interface UserProgress {
   completedLessons: string[];
   completedChallenges: string[];
   currentLesson: string;
+  currentCourse: CourseId;
 }
